@@ -79,12 +79,6 @@ The `docker-compose.yml` provides dev defaults. Typically you will adjust:
 - **LLM base URL/model** via backend environment variables (e.g. `LLM_BASE_URL`, `LLM_MODEL`).
 - **Credentials** via the Vault panel in the UI (stored in SQLite and consumed by backend tools).
 
-### Security
-
-- Do not push databases/exports to GitHub: `./data`, `*.db`, and `vault_export*.txt` are already ignored in `.gitignore`.
-- If you upload via ZIP/drag-and-drop to GitHub, delete `data/` before uploading.
-- To wipe Docker data (containers + DB volume): `docker compose down -v`.
-
 ### Donations
 
 If this project helps you, consider supporting it:
@@ -203,12 +197,6 @@ O `docker-compose.yml` já traz defaults para desenvolvimento. Em geral você va
 
 - **LLM base URL/model** via variáveis de ambiente no serviço `backend` (ex.: `LLM_BASE_URL`, `LLM_MODEL`).
 - **Credenciais** via painel do Vault na UI (salvas no SQLite e consumidas pelas ferramentas do backend).
-
-### Segurança
-
-- Não suba banco/exports para o GitHub: `./data`, `*.db` e `vault_export*.txt` já estão no `.gitignore`.
-- Se fizer upload manual (ZIP/drag-and-drop) no GitHub, apague `data/` antes de enviar.
-- Para limpar dados do Docker (containers + volume do banco): `docker compose down -v`.
 
 ### Doações
 
