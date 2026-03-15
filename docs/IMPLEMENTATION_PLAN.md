@@ -1,132 +1,132 @@
-# 🏢 SEO Life — Self-Executive Office
-## Plano de Implementação Completo
+# 🏢 Pixels Office Empire — AI Agents Virtual Office
+## Complete Implementation Plan
 
 ---
 
-## 📋 Visão Geral
+## 📋 Overview
 
-Um escritório virtual pixelado onde **agentes de IA autônomos** gerenciam a vida do dono.
-Cada agente tem uma profissão, personalidade, memória, e pode operar no mundo real
-(código, finanças, blockchain, design, comunicação).
+A pixel-art virtual office where **autonomous AI agents** run the owner’s operations.
+Each agent has a profession, personality, and memory, and can act in the real world
+(code, finance, blockchain, design, communication).
 
 ---
 
-## 🏛️ Organograma do Escritório (18 funcionários)
+## 🏛️ Office Org Chart (18 roles)
 
-### Diretoria
-| # | Cargo | Sala | Modelo Sugerido |
-|---|-------|------|-----------------|
-| 1 | **CEO (Chief Executive Officer)** | Privativa | claude-sonnet-4 |
-| 2 | **CFO (Chief Financial Officer)** | Privativa | gpt-4o |
-| 3 | **CTO (Chief Technology Officer)** | Principal | claude-sonnet-4 |
+### Executive Team
+| # | Role | Room | Suggested Model |
+|---|------|------|-----------------|
+| 1 | **CEO (Chief Executive Officer)** | Private | claude-sonnet-4 |
+| 2 | **CFO (Chief Financial Officer)** | Private | gpt-4o |
+| 3 | **CTO (Chief Technology Officer)** | Main | claude-sonnet-4 |
 
-### Departamento Financeiro
-| # | Cargo | Modelo |
-|---|-------|--------|
-| 4 | **Contador** | gpt-4o-mini |
-| 5 | **Tesoureiro (Contas a Pagar/Receber)** | gpt-4o-mini |
-| 6 | **Gestor de Investimentos / Crypto Trader** | gpt-4o |
-| 7 | **Advogado** | gpt-4o |
+### Finance Department
+| # | Role | Model |
+|---|------|-------|
+| 4 | **Accountant** | gpt-4o-mini |
+| 5 | **Treasurer (Accounts Payable/Receivable)** | gpt-4o-mini |
+| 6 | **Investments Manager / Crypto Trader** | gpt-4o |
+| 7 | **Lawyer** | gpt-4o |
 
-### Departamento Técnico
-| # | Cargo | Modelo |
-|---|-------|--------|
-| 8 | **Dev Fullstack** | claude-sonnet-4 |
-| 9 | **Dev Frontend** | gpt-4o-mini |
+### Engineering Department
+| # | Role | Model |
+|---|------|-------|
+| 8 | **Fullstack Developer** | claude-sonnet-4 |
+| 9 | **Frontend Developer** | gpt-4o-mini |
 | 10 | **DevOps / Infra** | gpt-4o-mini |
 | 11 | **QA Tester** | gpt-4o-mini |
 
-### Departamento Criativo
-| # | Cargo | Modelo |
-|---|-------|--------|
-| 12 | **Designer Gráfico** | gpt-4o |
-| 13 | **Redator / Copywriter** | gpt-4o-mini |
+### Creative Department
+| # | Role | Model |
+|---|------|-------|
+| 12 | **Graphic Designer** | gpt-4o |
+| 13 | **Writer / Copywriter** | gpt-4o-mini |
 | 14 | **Social Media Manager** | gpt-4o-mini |
 
-### Suporte
-| # | Cargo | Modelo |
-|---|-------|--------|
-| 15 | **Gerente de Projetos** | gpt-4o-mini |
-| 16 | **Assistente Pessoal** | gpt-4o-mini |
-| 17 | **Pesquisador Web** | gpt-4o-mini |
-| 18 | **Gerente de Compromissos** | gpt-4o-mini |
+### Support
+| # | Role | Model |
+|---|------|-------|
+| 15 | **Project Manager** | gpt-4o-mini |
+| 16 | **Personal Assistant** | gpt-4o-mini |
+| 17 | **Web Researcher** | gpt-4o-mini |
+| 18 | **Scheduling Manager** | gpt-4o-mini |
 
 ---
 
-## 🧠 Arquitetura do Brain Engine
+## 🧠 Brain Engine Architecture
 
-### Ciclo de Vida (Agent Loop) — Roda a cada 30-60s
+### Lifecycle (Agent Loop) — Default cycle: 25s
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                  AGENT LOOP                      │
+│                   AGENT LOOP                     │
 │                                                  │
-│  1. 📥 PERCEBER                                  │
-│     - Checar inbox (mensagens de outros agentes) │
-│     - Checar tarefas pendentes                   │
-│     - Checar eventos/agenda                      │
+│  1. 📥 PERCEIVE                                  │
+│     - Check inbox (messages from other agents)    │
+│     - Check pending tasks                         │
+│     - Check events/schedule                       │
 │                                                  │
-│  2. 🧠 PENSAR (LLM Call via OpenRouter)          │
-│     - System Prompt (personalidade + role)        │
-│     - Context: memória + inbox + tarefas          │
-│     - Output: JSON com ação a tomar               │
+│  2. 🧠 THINK (LLM call)                            │
+│     - System Prompt (personality + role)          │
+│     - Context: memory + inbox + tasks             │
+│     - Output: JSON describing the next action     │
 │                                                  │
-│  3. 📤 AGIR                                      │
-│     - Executar ferramenta (tool)                  │
-│     - Enviar mensagem para outro agente           │
-│     - Solicitar aprovação humana se necessário    │
-│     - Criar sub-tarefa para subordinado           │
+│  3. 📤 ACT                                        │
+│     - Run a tool                                  │
+│     - Send messages to other agents               │
+│     - Ask the human owner for approval if needed  │
+│     - Create sub-tasks for other agents           │
 │                                                  │
-│  4. 💾 MEMORIZAR                                  │
-│     - Salvar resultado na memória curta           │
-│     - Periodicamente: resumir em memória longa    │
+│  4. 💾 REMEMBER                                   │
+│     - Save results into short-term memory         │
+│     - Periodically summarize into long-term       │
 │                                                  │
-│  5. 💬 REPORTAR                                   │
-│     - Atualizar status visual (balãozinho)        │
-│     - Enviar relatório ao superior se necessário  │
+│  5. 💬 REPORT                                     │
+│     - Update visual status (bubble/overlay)       │
+│     - Report to a superior when needed            │
 │                                                  │
 └─────────────────────────────────────────────────┘
 ```
 
-### Níveis de Permissão
+### Permission Levels
 
-| Nível | Descrição | Exemplos |
-|-------|-----------|----------|
-| 🟢 **AUTO** | Pode fazer sozinho | Pesquisar, escrever, calcular |
-| 🟡 **NOTIFY** | Faz e avisa o dono | Enviar email, criar arquivo |
-| 🔴 **APPROVE** | Precisa de aprovação | Transação crypto, deploy, gasto > $50 |
-
----
-
-## 🛠️ Sistema de Ferramentas (Tools)
-
-### Ferramentas Básicas (Fase 1)
-- `think` — Refletir internamente
-- `send_message` — Enviar mensagem para outro agente
-- `ask_human` — Pedir algo ao dono (aparece como notificação)
-- `create_task` — Criar tarefa para si ou subordinado
-- `search_web` — Pesquisar na internet
-- `read_file` / `write_file` — Ler/escrever arquivos
-
-### Ferramentas Avançadas (Fase 2)
-- `run_code` — Executar código no Docker sandbox
-- `send_email` — Enviar email
-- `generate_image` — Gerar imagem via DALL-E
-- `manage_calendar` — Criar/editar compromissos
-- `create_invoice` — Gerar nota fiscal / fatura
-
-### Ferramentas Blockchain (Fase 3)
-- `check_balance` — Ver saldo de carteira crypto
-- `send_crypto` — Enviar transação (🔴 REQUER APROVAÇÃO)
-- `swap_tokens` — Trocar tokens em DEX (🔴 REQUER APROVAÇÃO)  
-- `check_portfolio` — Ver alocação de investimentos
-- `monitor_market` — Acompanhar preços e tendências
+| Level | Description | Examples |
+|------:|-------------|----------|
+| 🟢 **AUTO** | Can execute autonomously | Research, write, calculate |
+| 🟡 **NOTIFY** | Executes and informs the owner | Send email, generate files |
+| 🔴 **APPROVE** | Requires approval | Crypto transactions, deploys, spend > $50 |
 
 ---
 
-## 💬 Sistema de Chat Inter-Agentes
+## 🛠️ Tool System
 
-### Tabela: messages
+### Core Tools (Phase 1)
+- `think` — Internal reasoning
+- `send_message` — Message another agent
+- `ask_human` — Ask the owner for access/approval (notification)
+- `create_task` — Delegate tasks to self or another agent
+- `web_search` — Browse/search the web
+- `read_file` / `write_file` — File operations
+
+### Advanced Tools (Phase 2)
+- `run_code` — Run code inside a sandbox
+- `send_email` — Email sending
+- `generate_image` — Image generation
+- `manage_calendar` — Create/edit calendar events
+- `create_invoice` — Generate invoices/receipts
+
+### Blockchain Tools (Phase 3)
+- `check_balance` — Check wallet balance
+- `send_crypto` — Send a transaction (🔴 APPROVAL REQUIRED)
+- `swap_tokens` — Swap tokens on a DEX (🔴 APPROVAL REQUIRED)
+- `check_portfolio` — Portfolio allocation
+- `monitor_market` — Prices and trend monitoring
+
+---
+
+## 💬 Inter-Agent Chat System
+
+### Table: messages
 ```sql
 CREATE TABLE messages (
     id TEXT PRIMARY KEY,
@@ -139,57 +139,56 @@ CREATE TABLE messages (
 );
 ```
 
-### Fluxo Visual
-1. Agente envia mensagem → salva no banco
-2. Backend emite WebSocket → frontend recebe
-3. Frontend mostra balãozinho sobre o personagem (2-5 seg)
-4. Mensagens ficam no histórico acessível pela UI
+### UI Flow
+1. Agent sends a message → persisted in the database
+2. Backend emits a WebSocket event → frontend receives it
+3. Frontend shows a speech bubble over the character (2–5s)
+4. Messages remain accessible in the UI history
 
 ---
 
-## 📅 Fases de Implementação
+## 📅 Implementation Phases
 
-### ✅ Fase 0 — Infraestrutura (COMPLETA)
-- [x] Backend Express + Socket.IO
-- [x] Frontend React desacoplado
-- [x] Banco de dados SQLite
-- [x] CRUD de agentes via API REST
-- [x] Layout do escritório grande com partições
-- [x] Multi-idioma (PT padrão)
-- [x] Contratar / Demitir agentes
+### ✅ Phase 0 — Infrastructure (DONE)
+- [x] Express + Socket.IO backend
+- [x] Decoupled React frontend
+- [x] SQLite persistence
+- [x] Agent CRUD via REST API
+- [x] Large office layout with partitions
+- [x] Multi-language (PT default)
+- [x] Hire / fire agents
 
-### 🔨 Fase 1 — Brain Engine (PRÓXIMA)
-- [ ] Classe `AgentBrain` no backend
-- [ ] Integração OpenRouter (LLM call)
-- [ ] System prompts por profissão
-- [ ] Agent Loop básico (perceber → pensar → agir)
-- [ ] Tabela `messages` para chat inter-agentes
-- [ ] Balõezinhos de chat no canvas
-- [ ] Tool: `send_message`, `think`, `ask_human`
-- [ ] Notificações para o dono (pedidos de aprovação)
+### ✅ Phase 1 — Brain Engine (DONE)
+- [x] `AgentBrain` / orchestration in backend
+- [x] LLM integration
+- [x] Role-based system prompts
+- [x] Basic agent loop (perceive → think → act)
+- [x] `messages` table for inter-agent chat
+- [x] Chat bubbles / real-time messaging
+- [x] Owner notifications (human approval flow)
 
-### 🔨 Fase 2 — Ferramentas Básicas
-- [ ] Tool: `search_web`
-- [ ] Tool: `run_code` (Docker sandbox)
-- [ ] Tool: `read_file` / `write_file`
-- [ ] Tool: `send_email`
-- [ ] Tool: `generate_image`
-- [ ] Tool: `manage_calendar`
-- [ ] Sistema de permissões (auto/notify/approve)
-- [ ] Memória de longo prazo
+### 🔨 Phase 2 — Core Tools (IN PROGRESS)
+- [ ] Web search
+- [ ] Sandbox execution
+- [ ] File read/write tools
+- [ ] Email sending
+- [ ] Image generation
+- [ ] Calendar management
+- [ ] Permission system (auto/notify/approve)
+- [ ] Long-term memory
 
-### 🔨 Fase 3 — Blockchain & Finanças
-- [ ] Integração Web3 (ethers.js)
-- [ ] Tool: `check_balance`, `check_portfolio`
-- [ ] Tool: `send_crypto` (com aprovação)
-- [ ] Tool: `swap_tokens`, `monitor_market`
-- [ ] Dashboard financeiro na UI
-- [ ] Relatórios automáticos do CFO
+### 🔨 Phase 3 — Blockchain & Finance (PLANNED)
+- [ ] Web3 integration
+- [ ] `check_balance`, `check_portfolio`
+- [ ] `send_crypto` (with approval)
+- [ ] `swap_tokens`, `monitor_market`
+- [ ] Financial dashboard in the UI
+- [ ] Automated CFO reports
 
-### 🔨 Fase 4 — Autonomia Total
-- [ ] Agentes pensam e agem sozinhos periodicamente
-- [ ] CEO delega automaticamente baseado em prioridades
-- [ ] Relatório diário automático para o dono
-- [ ] Agentes aprendem com feedback (memória adaptativa)
-- [ ] Criação autônoma de novos projetos
+### 🔨 Phase 4 — Full Autonomy (PLANNED)
+- [ ] Agents think and act periodically without prompts
+- [ ] CEO auto-delegates based on priorities
+- [ ] Automated daily report to the owner
+- [ ] Agents learn from feedback (adaptive memory)
+- [ ] Autonomous creation of new projects
 ---
