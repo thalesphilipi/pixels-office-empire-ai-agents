@@ -1,0 +1,36 @@
+{
+  "name": "pixels-office-empire-backend",
+  "version": "1.0.0",
+  "main": "dist/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "export:vault": "npm run build && node --input-type=module -e \"import fs from 'fs'; import path from 'path'; import { initDb, db } from './dist/db.js'; initDb(); const rows = db.prepare('SELECT key_id, key_name, service, key_value, created_at FROM vault ORDER BY created_at DESC').all(); const out = rows.map(r => [r.key_id, r.service, r.key_name, r.key_value, r.created_at].join('\\t')).join('\\n'); const root = (process.env.INIT_CWD || process.cwd()).toString(); const target = path.resolve(root, 'vault_export.txt'); fs.writeFileSync(target, out, 'utf-8'); console.log('OK:', target, '(' + rows.length + ' keys)');\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "description": "",
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "cheerio": "^1.2.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "pngjs": "^7.0.0",
+    "socket.io": "^4.8.3",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.4.0",
+    "@types/pngjs": "^6.0.5",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

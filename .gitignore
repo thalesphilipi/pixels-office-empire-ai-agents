@@ -1,0 +1,15 @@
+out
+dist
+node_modules
+.vscode-test/
+*.vsix
+.claude/
+/logs
+/sprites-export
+.env
+/data
+*.db
+*.sqlite
+*.sqlite3
+backend/workspace/
+vault_export*.txt

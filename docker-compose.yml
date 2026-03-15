@@ -1,0 +1,49 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount source code for hot reload (dev mode)
+      - ./backend:/app
+      # Map node_modules to a volume to avoid host-guest conflicts (Windows/Linux)
+      - backend_node_modules:/app/node_modules
+      # PERSIST THE DATABASE
+      - backend_data:/data
+      # Share frontend public assets so the backend can parse/emit sprites/layout
+      - ./frontend/public:/frontend/public:ro
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - LLM_BASE_URL=http://host.docker.internal:1234/v1
+      - LLM_MODEL=qwen3.5-9b-claude-4.6-opus-distilled-32k
+      - LLM_MAX_TOKENS=2048
+      - CHOKIDAR_USEPOLLING=true
+      - MAX_PENDING_TASKS=6
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Need to keep it running for the thinkers
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      # Mount source code for hot reload
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    depends_on:
+      - backend
+    environment:
+      - VITE_SOCKET_URL=http://localhost:3000
+    restart: always
+
+volumes:
+  backend_node_modules:
+  backend_data:
+  frontend_node_modules:
