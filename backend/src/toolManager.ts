@@ -245,11 +245,21 @@ const TOOLS: Record<string, Tool> = {
                     const html = await response.text();
                     const $ = cheerio.load(html);
                     const snippets: string[] = [];
-                    $('.result__snippet').each((i, el) => {
-                        snippets.push($(el).text().trim());
+                    // DuckDuckGo lite version typically uses .result-snippet
+                    $('.result-snippet').each((i, el) => {
+                        snippets.push($(el).text().trim().replace(/\s+/g, ' '));
                     });
+
+                    if (snippets.length === 0) {
+                        // fallback for other DDG versions
+                        $('.result__snippet').each((i, el) => {
+                            snippets.push($(el).text().trim().replace(/\s+/g, ' '));
+                        });
+                    }
+
                     if (snippets.length === 0) return `Sem resultados para "${query}"`;
-                    return `Resultados da busca web para "${query}":\n\n` + snippets.slice(0, 5).join('\n---\n');
+                    // Limit text length to avoid token bloat
+                    return `DuckDuckGo resultados para "${query}":\n` + snippets.slice(0, 3).join('\n- ').substring(0, 1500);
                 };
 
                 const queries = resolveQueries();
@@ -350,6 +360,13 @@ const TOOLS: Record<string, Tool> = {
                     return "Erro: Acesso negado fora da pasta do projeto.";
                 }
                 const content = await fs.readFile(fullPath, 'utf8');
+
+                // Return only first N chars to protect context window limit
+                const maxChars = 3000;
+                if (content.length > maxChars) {
+                    return content.substring(0, maxChars) + '\n\n...[TRUNCADO. ARQUIVO MUITO GRANDE. Use read_file_range para ler partes específicas]';
+                }
+
                 return content;
             } catch (err: any) {
                 return `Erro ao ler arquivo: ${err.message}`;
