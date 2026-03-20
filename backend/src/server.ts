@@ -885,11 +885,11 @@ async function initServer() {
                 thought
             });
         },
-        onActivity: (agentId: string, activity: string, detail: string) => {
+        onActivity: (agentId: string, activity: string, detail?: string) => {
             io.emit('message', {
                 type: 'agentActivity',
                 agentId,
-                activity, // 'thinking' | 'coding' | 'searching' | 'chatting' | 'praying' | 'analyzing' | 'thinking_deep' | 'idle'
+                activity, // 'thinking' | 'coding' | 'searching' | 'chatting' | 'praying' | 'analyzing' | 'thinking_deep' | 'circuit_breaker' | 'finance' | 'idle'
                 detail
             });
         },

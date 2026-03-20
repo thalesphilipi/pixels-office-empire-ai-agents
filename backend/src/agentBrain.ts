@@ -364,28 +364,54 @@ Formato esperado:
                 const descPreview = desc.length > 800 ? (desc.slice(0, 800) + '...') : desc;
                 prompt += `\nTask Ativa (${task.id}):\n${descPreview}\n`;
 
-                // --- RAG Passivo (Memória de Longo Prazo Associativa) ---
-                // Tenta extrair palavras chaves da task para buscar dicas na Knowledge Base
-                const taskKeywords = desc.split(' ').filter(w => w.length > 4).slice(0, 3).map(w => w.replace(/[^a-zA-Z0-9]/g, ''));
-                if (taskKeywords.length > 0) {
-                    try {
-                        let sql = "SELECT title, content FROM knowledge_base WHERE ";
-                        let conditions = [];
-                        let params = [];
-                        for(const word of taskKeywords) {
-                           conditions.push("(title LIKE ? OR content LIKE ?)");
-                           params.push(`%${word}%`);
-                           params.push(`%${word}%`);
-                        }
-                        sql += conditions.join(' OR ') + " ORDER BY created_at DESC LIMIT 1";
+                // --- RAG Semântico Avançado (TF-IDF / BM25 Simulado) ---
+                try {
+                    const allDocs = db.prepare("SELECT title, content FROM knowledge_base").all() as any[];
+                    if (allDocs.length > 0) {
+                        const tokenize = (t: string) => t.toLowerCase().replace(/[^a-z0-9]/g, ' ').split(/\s+/).filter(w => w.length > 3);
+                        const queryTokens = tokenize(desc);
 
-                        const kbMatch = db.prepare(sql).get(...params) as any;
-                        if (kbMatch && kbMatch.title && kbMatch.content) {
-                            prompt += `\n💡 Memória Associativa (Dica Interna da Empresa):\n[${kbMatch.title}]: ${kbMatch.content.substring(0, 300)}...\n`;
+                        if (queryTokens.length > 0) {
+                            let bestDoc = null;
+                            let maxScore = 0;
+
+                            // Calculate Inverse Document Frequency (IDF)
+                            const df = new Map<string, number>();
+                            allDocs.forEach(doc => {
+                                const seen = new Set<string>();
+                                tokenize(doc.title + " " + doc.content).forEach(t => seen.add(t));
+                                seen.forEach(t => df.set(t, (df.get(t) || 0) + 1));
+                            });
+
+                            // Score each document against query using TF-IDF logic
+                            for (const doc of allDocs) {
+                                const docTokens = tokenize(doc.title + " " + doc.content);
+                                let score = 0;
+
+                                for (const q of queryTokens) {
+                                    // Term Frequency (TF)
+                                    const tf = docTokens.filter(t => t === q).length;
+                                    if (tf > 0) {
+                                        // Inverse Document Frequency (IDF)
+                                        const docFreq = df.get(q) || 1;
+                                        const idf = Math.log(allDocs.length / docFreq) + 1;
+                                        score += (tf * idf);
+                                    }
+                                }
+
+                                if (score > maxScore && score > 1.5) { // Minimum threshold to prevent noise
+                                    maxScore = score;
+                                    bestDoc = doc;
+                                }
+                            }
+
+                            if (bestDoc) {
+                                prompt += `\n💡 Memória Semântica (Dica Interna da Empresa):\n[${bestDoc.title}]: ${bestDoc.content.substring(0, 300)}...\n`;
+                            }
                         }
-                    } catch (kbError) {
-                        // ignore if knowledge_base table doesn't exist or query fails
                     }
+                } catch (kbError) {
+                    // ignore if knowledge_base table doesn't exist or query fails
                 }
             }
         } catch (e) { }
@@ -659,6 +685,7 @@ export class BrainManager {
 
                 // Let the agent skip this turn and wait for human input
                 this.callbacks.onStatus?.(id, 'waiting');
+                this.callbacks.onActivity?.(id, 'circuit_breaker', 'circuit_breaker');
                 return;
             }
 
@@ -709,14 +736,26 @@ export class BrainManager {
                 const info = res.tool_args?.path || res.tool_args?.project_name || res.tool_args?.query || '';
                 const argsPreview = safeJsonPreview(res.tool_args || {}, 360);
                 console.log(`[${agent.name}] 🛠️  TOOL: ${res.tool_name} ${info ? `(${info})` : ''} args=${argsPreview}`);
+
+                // Emit activity for visual feedback before execution
+                let act = 'coding';
+                if (res.tool_name.includes('search') || res.tool_name.includes('browser')) act = 'searching';
+                if (res.tool_name.includes('finance') || res.tool_name.includes('blockchain')) act = 'finance';
+                this.callbacks.onActivity?.(id, act, res.tool_name);
+
                 const tres = await toolManager.executeTool(res.tool_name, res.tool_args || {}, { agentId: id, agentName: agent.name });
                 const outPreview = safeJsonPreview(tres, 500);
                 const outText = (typeof tres === 'string' ? tres : JSON.stringify(tres));
                 const toolFailed = typeof outText === 'string' && /^(Erro\b|❌)/.test(outText.trim());
+
                 if (toolFailed) {
                     console.log(`[${agent.name}] ❌ TOOL FAIL: ${res.tool_name} output=${outPreview}`);
                     brain.addIncomingMessage('SYSTEM', `Falha em ${res.tool_name}: ${outText}`);
                     brain.incrementFailure(res.tool_name);
+
+                    if (outText.includes('Erro de Sintaxe') || outText.includes('SINTAXE')) {
+                       this.callbacks.onActivity?.(id, 'circuit_breaker', 'Erro de Sintaxe');
+                    }
                 } else {
                     console.log(`[${agent.name}] ✅ TOOL OK: ${res.tool_name} output=${outPreview}`);
                     brain.addIncomingMessage('SYSTEM', `Resultado de ${res.tool_name}: ${outText}`);
