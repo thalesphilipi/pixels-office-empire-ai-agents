@@ -98,6 +98,14 @@ export function updateCharacter(
 ): void {
   ch.frameTimer += dt
 
+  if (ch.overheadIconTimer && ch.overheadIconTimer > 0) {
+    ch.overheadIconTimer -= dt
+    if (ch.overheadIconTimer <= 0) {
+      ch.overheadIcon = null
+      ch.overheadIconTimer = 0
+    }
+  }
+
   switch (ch.state) {
     case CharacterState.TYPE: {
       if (ch.frameTimer >= TYPE_FRAME_DURATION_SEC) {

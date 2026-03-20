@@ -445,6 +445,55 @@ export function renderRotateButton(
   return { cx, cy, radius }
 }
 
+// ── Overhead Icons (Phase 4) ────────────────────────────────────
+
+export function renderOverheadIcons(
+  ctx: CanvasRenderingContext2D,
+  characters: Character[],
+  offsetX: number,
+  offsetY: number,
+  zoom: number,
+): void {
+  for (const ch of characters) {
+    if (!ch.overheadIcon || !ch.overheadIconTimer || ch.overheadIconTimer <= 0) continue
+
+    const sittingOff = ch.state === CharacterState.TYPE ? BUBBLE_SITTING_OFFSET_PX : 0
+    const iconX = Math.round(offsetX + ch.x * zoom)
+    // Display higher than chat bubbles
+    const iconY = Math.round(offsetY + (ch.y + sittingOff - 50) * zoom)
+
+    // Floating bounce animation
+    const bounce = Math.sin(Date.now() / 150) * 3 * zoom
+
+    ctx.save()
+    const fontSize = Math.max(14, Math.round(20 * zoom))
+    ctx.font = `${fontSize}px 'Segoe UI Emoji', sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+
+    let alpha = 1.0
+    if (ch.overheadIconTimer < 1.0) {
+      alpha = ch.overheadIconTimer / 1.0
+    }
+
+    // Se for o circuit breaker (alerta), pisca rapidamente
+    if (ch.overheadIcon === '🚨') {
+       alpha = alpha * (0.6 + Math.sin(Date.now() / 80) * 0.4)
+    }
+
+    ctx.globalAlpha = alpha
+
+    // Draw shadow
+    ctx.shadowColor = 'rgba(0,0,0,0.8)'
+    ctx.shadowBlur = 4 * zoom
+    ctx.shadowOffsetY = 2 * zoom
+
+    // Draw icon
+    ctx.fillText(ch.overheadIcon, iconX, iconY + bounce)
+    ctx.restore()
+  }
+}
+
 // ── Speech bubbles ──────────────────────────────────────────────
 
 export function renderBubbles(
@@ -753,6 +802,9 @@ export function renderFrame(
 
   // Chat floating text (Phase 2)
   renderChatTexts(ctx, characters, offsetX, offsetY, zoom)
+
+  // Overhead Icons (Phase 4 - Machine Revolution)
+  renderOverheadIcons(ctx, characters, offsetX, offsetY, zoom)
 
   // Editor overlays
   if (editor) {

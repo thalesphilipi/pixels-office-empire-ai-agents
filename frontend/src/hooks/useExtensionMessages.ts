@@ -385,6 +385,7 @@ export function useExtensionMessages(
           type: 'chat',
           timestamp: new Date().toLocaleTimeString()
         }])
+
         // Show floating chat text on the sender character
         const numId = Number(agentId?.slice?.(-6)) || 0
         if (numId && os.characters.has(numId)) {
@@ -392,6 +393,21 @@ export function useExtensionMessages(
           os.showChatText(numId, content)
           os.setAgentActivity(numId, 'chatting')
         }
+
+        // Phase 5: Voice (Text-to-Speech) for broadcast or human interaction
+        if (targetAgentId === 'ALL' || targetAgentId === 'HUMAN' || numId === 0) {
+          if ('speechSynthesis' in window) {
+            const cleanText = content.replace(/https?:\/\/[^\s]+/g, 'link').replace(/\[([^\]]+)\]/g, '$1')
+            const utterance = new SpeechSynthesisUtterance(cleanText)
+            utterance.pitch = numId === 0 ? 1.0 : 0.8 + ((numId % 10) / 20)
+            utterance.rate = 1.15
+            const voices = window.speechSynthesis.getVoices()
+            const ptVoice = voices.find(v => v.lang.startsWith('pt'))
+            if (ptVoice) utterance.voice = ptVoice
+            window.speechSynthesis.speak(utterance)
+          }
+        }
+
         // Also show receiving indicator on target agent
         if (targetAgentId) {
           const targetNumId = Number(targetAgentId?.slice?.(-6)) || 0
@@ -439,12 +455,13 @@ export function useExtensionMessages(
 
         os.assembleMeeting(participants)
       } else if (msg.type === 'agentActivity') {
-        // Phase 1: Activity status icons
+        // Phase 1: Activity status icons & Phase 4: Overhead Icons
         const agentId = msg.agentId as string
         const activity = msg.activity as string
+        const detail = msg.detail as string
         const numId = Number(agentId?.slice?.(-6)) || 0
         if (numId && os.characters.has(numId)) {
-          os.setAgentActivity(numId, activity)
+          os.setAgentActivity(numId, activity, detail)
         }
       } else if (msg.type === 'investorSpeaks') {
         // Phase 3: God speaks — all agents look up

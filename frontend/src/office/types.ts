@@ -159,6 +159,10 @@ export interface Character {
   moveProgress: number
   /** Current tool name for typing vs reading animation, or null */
   currentTool: string | null
+  /** Optional icon to float above the character (e.g. '💻', '🚨') */
+  overheadIcon?: string | null
+  /** Time remaining for overhead icon display */
+  overheadIconTimer?: number
   /** Palette index (0-5) */
   palette: number
   /** Hue shift in degrees (0 = no shift, ≥45 for repeated palettes) */

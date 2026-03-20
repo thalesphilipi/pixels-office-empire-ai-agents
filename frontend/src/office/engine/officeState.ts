@@ -643,7 +643,7 @@ export class OfficeState {
   }
 
   /** Set activity icon for an agent */
-  setAgentActivity(id: number, activity: string): void {
+  setAgentActivity(id: number, activity: string, detail?: string): void {
     const ch = this.characters.get(id)
     if (!ch) return
     const iconMap: Record<string, string> = {
@@ -654,8 +654,26 @@ export class OfficeState {
       'chatting': '💬',
       'praying': '🙏',
       'analyzing': '📊',
+      'circuit_breaker': '🚨',
+      'finance': '💰',
       'idle': '',
     }
+
+    // Phase 4 Overhead Icons logic based on detail and activity
+    if (detail && detail.includes('mcp_shell_exec')) {
+       ch.overheadIcon = '💻'
+       ch.overheadIconTimer = 5.0
+    } else if (detail && detail.includes('Erro de Sintaxe') || activity === 'circuit_breaker') {
+       ch.overheadIcon = '🚨'
+       ch.overheadIconTimer = 6.0
+    } else if (detail && (detail.includes('mcp_finance_revenue') || detail.includes('mcp_finance_payroll'))) {
+       ch.overheadIcon = '💰'
+       ch.overheadIconTimer = 5.0
+    } else if (detail && (detail.includes('mcp_fetch_page') || detail.includes('web_search'))) {
+       ch.overheadIcon = '🔍'
+       ch.overheadIconTimer = 4.0
+    }
+
     const icon = iconMap[activity] || '⚡'
     if (activity === 'idle' || !icon) {
       ch.activityIcon = null
