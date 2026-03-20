@@ -368,6 +368,54 @@ async function initServer() {
         res.json(company);
     });
 
+    // ── Approvals (Web3 / Critical Ops) ───────────────────────
+    app.get('/api/approvals', (req, res) => {
+        try {
+            const rows = db.prepare(`
+                SELECT ap.*, a.name as agent_name
+                FROM approvals ap
+                LEFT JOIN agents a ON ap.agent_id = a.id
+                WHERE ap.status = 'pending'
+                ORDER BY ap.created_at DESC
+            `).all();
+            res.json(rows);
+        } catch(e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
+    app.post('/api/approvals/:id/action', (req, res) => {
+        try {
+            const id = req.params.id;
+            const action = req.body?.action === 'approve' ? 'approved' : 'rejected';
+
+            const approval = db.prepare('SELECT * FROM approvals WHERE id = ?').get(id) as any;
+            if (!approval) return res.status(404).json({ error: 'Not found' });
+            if (approval.status !== 'pending') return res.status(400).json({ error: 'Already resolved' });
+
+            db.prepare('UPDATE approvals SET status = ? WHERE id = ?').run(action, id);
+
+            // Avisar o agente que a pendência foi resolvida
+            const msg = action === 'approved'
+                ? `✅ O Dono (Humano) APROVOU sua solicitação (${approval.action_type}). A transação foi assinada e o payload foi liberado para a rede.`
+                : `❌ O Dono REJEITOU sua solicitação (${approval.action_type}). Por favor, aborte essa ação ou busque outra estratégia.`;
+
+            db.prepare('INSERT INTO messages (id, from_agent_id, to_agent_id, content) VALUES (?, ?, ?, ?)').run(
+                `m_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                'HUMAN',
+                approval.agent_id,
+                msg
+            );
+
+            // Retomar a task se ela estava presa (via BrainManager)
+            setTimeout(() => void brainManager.process(approval.agent_id), 1000);
+
+            res.json({ success: true, new_status: action });
+        } catch(e: any) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+
     // ── Divisions (Objectives / Projects) ───────────────────────
     app.get('/api/divisions', (_req, res) => {
         try {

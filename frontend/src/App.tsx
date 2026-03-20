@@ -20,6 +20,7 @@ import { ChatPanel } from './components/ChatPanel.js'
 import { AgentInfoPanel } from './components/AgentInfoPanel.js'
 import { VaultPanel } from './components/VaultPanel.js'
 import { DivisionsManager } from './components/DivisionsManager.js'
+import { ApprovalsPanel } from './components/ApprovalsPanel.js'
 
 // Game state lives outside React — updated imperatively by message handlers
 const officeStateRef = { current: null as OfficeState | null }
@@ -241,6 +242,7 @@ function App() {
         onOpenTasks={() => setActiveModal('tasks')}
         onOpenVault={() => setActiveModal('vault')}
         onOpenDivisions={() => setActiveModal('divisions')}
+        onOpenApprovals={() => setActiveModal('approvals')}
         isChatOpen={showChat}
         onToggleChat={() => setShowChat((v) => !v)}
       />
@@ -258,6 +260,7 @@ function App() {
       {activeModal === 'agents' && <AgentManager onClose={() => setActiveModal(null)} />}
       {activeModal === 'tasks' && <TaskManager onClose={() => setActiveModal(null)} />}
       {activeModal === 'divisions' && <DivisionsManager onClose={() => setActiveModal(null)} />}
+      {activeModal === 'approvals' && <ApprovalsPanel onClose={() => setActiveModal(null)} />}
 
       {selectedAgentInfoId !== null && (
         <AgentInfoPanel agentId={selectedAgentInfoId} onClose={() => setSelectedAgentInfoId(null)} />

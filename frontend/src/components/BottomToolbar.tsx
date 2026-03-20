@@ -13,6 +13,7 @@ interface BottomToolbarProps {
   onOpenTasks: () => void
   onOpenVault: () => void
   onOpenDivisions: () => void
+  onOpenApprovals: () => void
   isChatOpen: boolean
   onToggleChat: () => void
 }
@@ -59,6 +60,7 @@ export function BottomToolbar({
   onOpenTasks,
   onOpenVault,
   onOpenDivisions,
+  onOpenApprovals,
   isChatOpen,
   onToggleChat,
 }: BottomToolbarProps) {
@@ -107,6 +109,22 @@ export function BottomToolbar({
 
   return (
     <div style={panelStyle}>
+      <button
+        onClick={onOpenApprovals}
+        onMouseEnter={() => setHovered('approvals')}
+        onMouseLeave={() => setHovered(null)}
+        style={{
+          ...btnBase,
+          padding: '5px 12px',
+          background: hovered === 'approvals' ? '#b00' : '#800',
+          border: '2px solid #f00',
+          color: '#fff',
+        }}
+        title="Painel de Aprovações Web3 / Gastos Críticos"
+      >
+        🚨 Aprovações
+      </button>
+
       <button
         onClick={onOpenClaude}
         onMouseEnter={() => setHovered('agent')}
