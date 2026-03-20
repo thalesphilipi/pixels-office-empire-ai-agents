@@ -27,52 +27,63 @@ function stripCodeFences(text: string): string {
 function extractFirstJsonObject(text: string): string | null {
     const s = (text || '');
     let start = -1;
+    let end = -1;
+    let depth = 0;
     let inString = false;
     let escaped = false;
+
     for (let i = 0; i < s.length; i++) {
         const ch = s[i];
-        if (inString) {
-            if (escaped) escaped = false;
-            else if (ch === '\\') escaped = true;
-            else if (ch === '"') inString = false;
-            continue;
-        }
-        if (ch === '"') {
-            inString = true;
-            continue;
-        }
-        if (ch === '{') {
-            start = i;
-            break;
-        }
-    }
-    if (start < 0) return null;
 
-    let depth = 0;
-    inString = false;
-    escaped = false;
-    for (let i = start; i < s.length; i++) {
-        const ch = s[i];
         if (inString) {
-            if (escaped) escaped = false;
-            else if (ch === '\\') escaped = true;
-            else if (ch === '"') inString = false;
+            if (escaped) {
+                escaped = false;
+            } else if (ch === '\\') {
+                escaped = true;
+            } else if (ch === '"') {
+                inString = false;
+            }
             continue;
         }
+
         if (ch === '"') {
             inString = true;
             continue;
         }
-        if (ch === '{') depth++;
-        if (ch === '}') {
-            depth--;
-            if (depth === 0) return s.slice(start, i + 1);
+
+        if (ch === '{') {
+            if (depth === 0) {
+                start = i;
+            }
+            depth++;
+        } else if (ch === '}') {
+            if (depth > 0) {
+                depth--;
+                if (depth === 0) {
+                    end = i;
+                    break;
+                }
+            }
         }
     }
+
+    if (start >= 0 && end >= 0) {
+        return s.substring(start, end + 1);
+    }
+
+    // Fallback: try to find the last closing brace if parsing failed halfway
+    if (start >= 0 && depth > 0) {
+        let lastBrace = s.lastIndexOf('}');
+        if (lastBrace > start) {
+            return s.substring(start, lastBrace + 1) + '}'.repeat(depth - 1); // rough attempt to balance
+        }
+    }
+
     return null;
 }
 
 function repairJsonStringNewlines(jsonText: string): string {
+    if (!jsonText) return '';
     const s = (jsonText || '');
     let out = '';
     let inString = false;
@@ -281,10 +292,26 @@ const ROLE_PROMPTS: Record<string, string> = {
 export class AgentBrain {
     private config: AgentConfig;
     private shortTermMemory: string[] = [];
+    private consecutiveFailures: number = 0;
+    private lastFailedTool: string | null = null;
     private readonly MAX_SHORT_MEMORY = 20;
 
     constructor(config: AgentConfig) {
         this.config = config;
+    }
+
+    public incrementFailure(toolName?: string) {
+        this.consecutiveFailures++;
+        if (toolName) this.lastFailedTool = toolName;
+    }
+
+    public resetFailure() {
+        this.consecutiveFailures = 0;
+        this.lastFailedTool = null;
+    }
+
+    public getFailures() {
+        return { count: this.consecutiveFailures, tool: this.lastFailedTool };
     }
 
     public updateConfig(config: AgentConfig): void {
@@ -294,30 +321,40 @@ export class AgentBrain {
     private buildSystemPrompt(): string {
         const rolePrompt = ROLE_PROMPTS[this.config.role] || `Você é um ${this.config.role}.`;
         const customPrompt = this.config.system_prompt || '';
-        return `${rolePrompt}\n\n${customPrompt}\n\nRegras obrigatórias:\n- Responda APENAS em JSON (sem markdown, sem crases, sem tags como <think>/<analysis>).\n- O campo thought deve explicar em 1–2 frases o motivo e o próximo passo.\n- Se action = \"use_tool\": sempre inclua tool_name e tool_args.\n- Não coloque JSON dentro de strings (não serialize objetos para dentro de content).\n- Se você precisar gerar HTML/CSS/JS grandes: use ferramentas de arquivo (ex: mcp_project_scaffold, mcp_fs_write_file) e não coloque o conteúdo completo em content.\n- Ao usar mcp_fs_write_file: use \\\\n em vez de quebras de linha literais e mantenha cada arquivo pequeno (ideal: <= 90 linhas e <= 9000 chars).\n- Ao usar ferramentas de arquivo: paths devem ser relativos ao workspace (ex: \"meu-projeto/index.html\"), nunca caminhos absolutos.\n\nFormato: {\"action\":\"...\",\"thought\":\"...\",\"content\":\"...\",\"tool_name\":\"...\",\"tool_args\":{}}`;
+        return `${rolePrompt} ${customPrompt}`.trim() + `
+Regras OBRIGATÓRIAS:
+1. Responda APENAS um JSON válido. Sem Markdown, sem crases, sem tags HTML ou XML (NÃO use <think>).
+2. Se "action": "use_tool", OBRIGATÓRIO informar "tool_name" e "tool_args".
+3. NÃO gere arquivos de código gigantes. Use "mcp_scaffold_project" para iniciar. Se precisar editar, crie partes pequenas (< 90 linhas).
+4. No campo "thought", seja extremamente breve e foque no Próximo Passo para atingir o objetivo (1 frase).
+5. Se falhar na mesma ação 3 vezes, retorne action: "idle".
+
+Formato esperado:
+{"action":"[use_tool|send_message|complete_task|idle]","thought":"...","content":"...","tool_name":"...","tool_args":{...}}`;
     }
 
     private buildUserPrompt(inbox: Message[]): string {
-        let prompt = `Eu sou ${this.config.name} (${this.config.role}).\n\n`;
+        let prompt = `Identidade: ${this.config.name} (${this.config.role})\n`;
         if (inbox.length > 0) {
-            prompt += "NOTIFICAÇÕES:\n";
-            const maxInbox = 4;
+            prompt += "Inbox:\n";
+            const maxInbox = 3;
             for (const msg of inbox.slice(0, maxInbox)) {
-                const content = String(msg.content || '').replace(/\s+/g, ' ').trim().slice(0, 240);
-                prompt += `- [${msg.from_name}]: ${content}\n`;
+                // Diminuindo o tamanho do slice para economizar contexto
+                const content = String(msg.content || '').replace(/\s+/g, ' ').trim().slice(0, 180);
+                prompt += `> [De: ${msg.from_name}] ${content}\n`;
             }
-            if (inbox.length > maxInbox) prompt += `- ... (+${inbox.length - maxInbox} mensagens)\n`;
+            if (inbox.length > maxInbox) prompt += `(+${inbox.length - maxInbox} antigas)\n`;
         }
         try {
             const task = db.prepare("SELECT id, description FROM tasks WHERE agent_id = ? AND status = 'pending' ORDER BY created_at ASC LIMIT 1").get(this.config.id) as any;
             if (task?.id && task?.description) {
-                prompt += "\nTAREFAS:\n";
                 const desc = String(task.description || '').trim();
-                const descPreview = desc.length > 1200 ? (desc.slice(0, 1200) + '…') : desc;
-                prompt += `- ID ${task.id}: ${descPreview}\n`;
+                // Task description limits for small local models
+                const descPreview = desc.length > 800 ? (desc.slice(0, 800) + '...') : desc;
+                prompt += `\nTask Ativa (${task.id}):\n${descPreview}\n`;
             }
         } catch (e) { }
-        prompt += "\nDecisão (JSON):";
+        prompt += "\nSaída (JSON):";
         return prompt;
     }
 
@@ -369,7 +406,7 @@ export class AgentBrain {
                 }
 
                 // O Comando Final (Usuário) - OBRIGATÓRIO PARA LM STUDIO
-                finalMessages.push({ role: 'user', content: user || "Analise a situação e decida o próximo passo." });
+                finalMessages.push({ role: 'user', content: user || "Analise a situação e decida o próximo passo. Retorne apenas JSON." });
 
                 const call = async (maxTokens: number, extraUser?: string) => {
                     const messages = extraUser ? [...finalMessages, { role: 'user', content: extraUser }] : finalMessages;
@@ -410,13 +447,26 @@ export class AgentBrain {
                     let parsed: any = null;
                     let lastErr: any = null;
                     for (const cand of candidates) {
-                        const extracted = extractFirstJsonObject(cand) || cand;
-                        const attempts = [extracted, repairJsonStringNewlines(extracted)];
+                        let extracted = extractFirstJsonObject(cand);
+                        if (!extracted) extracted = cand;
+
+                        // Try to fix common trailing commas before brace
+                        extracted = extracted.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
+
+                        const attempts = [
+                            extracted,
+                            repairJsonStringNewlines(extracted),
+                            // agressive newline cleanup inside content if the above failed
+                            extracted.replace(/\n/g, '\\n').replace(/\r/g, '')
+                        ];
+
                         const t = extracted.trim();
                         if (t.startsWith('{\\\"') || t.startsWith('[{\\\"')) {
-                            attempts.push(t.replace(/\\"/g, '"'));
-                            attempts.push(repairJsonStringNewlines(t.replace(/\\"/g, '"')));
+                            const unescaped = t.replace(/\\"/g, '"');
+                            attempts.push(unescaped);
+                            attempts.push(repairJsonStringNewlines(unescaped));
                         }
+
                         for (const a of attempts) {
                             try {
                                 parsed = JSON.parse(a);
@@ -458,7 +508,7 @@ export class AgentBrain {
                         attemptedRepair = true;
                         const repairedText = await call(
                             160,
-                            `Sua última saída foi JSON inválido (erro="${lastParseError}"). Responda AGORA com JSON curto e válido.\nRegras: (1) NÃO inclua HTML/CSS/JS longos em tool_args.content. (2) Se precisar criar um site/calculadora, prefira tool_name="mcp_project_scaffold" com tool_args={"project_name":"slug-curto","type":"calculator","description":"..."}.\nSaída: {"action":"use_tool","thought":"...","content":"","tool_name":"...","tool_args":{...}}`
+                            `Atenção: Sua última saída não foi um JSON válido (erro: "${lastParseError}"). Por favor, corrija seu erro.\nRetorne estritamente um objeto JSON com chaves: "action", "thought" (opcional), "tool_name", "tool_args" e "content".\nSe for escrever código HTML/JS/CSS, use "\\n" para quebras de linha ou mantenha o código compacto.\n\nJSON CORRIGIDO:`
                         );
                         if (repairedText) {
                             try {
@@ -480,7 +530,7 @@ export class AgentBrain {
                         attemptedRepair2 = true;
                         const repairedText2 = await call(
                             140,
-                            `Sua última saída foi JSON inválido por truncamento/strings longas. Responda SOMENTE com JSON mínimo e válido para criar a estrutura do projeto.\nUse exatamente:\n{"action":"use_tool","thought":"Vou criar a estrutura base do projeto sem escrever HTML manual.","content":"","tool_name":"mcp_project_scaffold","tool_args":{"project_name":"calculadora-basica","type":"calculator","description":"Calculadora simples com SEO básico"}}`
+                            `Você está tentando gerar um JSON muito grande e o modelo está cortando no meio. \nPARE de gerar arquivos enormes de uma vez. Mude sua estratégia: crie arquivos menores ou use mcp_scaffold_project.\nResponda agora com um JSON muito simples informando seu novo plano em "thought".`
                         );
                         if (repairedText2) {
                             try {
@@ -562,6 +612,21 @@ export class BrainManager {
             const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(id) as any;
             if (!brain || !agent) return;
 
+            // Circuit Breaker: prevent stuck agents
+            const fails = brain.getFailures();
+            if (fails.count >= 3) {
+                console.log(`[${agent.name}] 🛑 CIRCUIT BREAKER ATIVADO (3 falhas seguidas na tool: ${fails.tool || 'desconhecida'}). Pedindo ajuda.`);
+                this.callbacks.onAskHuman?.(agent.name, `Estou travado! Falhei 3 vezes seguidas tentando usar a ferramenta "${fails.tool || 'desconhecida'}". Preciso de ajuda ou que mude minha tarefa.`);
+
+                brain.addIncomingMessage('SYSTEM', `Você falhou 3 vezes seguidas. Pare de tentar a mesma coisa. O Dono foi notificado.`);
+                db.prepare('INSERT INTO messages (id, from_agent_id, to_agent_id, content) VALUES (?, ?, ?, ?)').run(`m_${Date.now()}`, id, 'HUMAN', `Estou preso em loop tentando executar ${fails.tool || 'uma ação'}.`);
+                brain.resetFailure();
+
+                // Let the agent skip this turn and wait for human input
+                this.callbacks.onStatus?.(id, 'waiting');
+                return;
+            }
+
             const inbox = db.prepare(`SELECT m.*, COALESCE(a.name, 'USER') as from_name FROM messages m LEFT JOIN agents a ON m.from_agent_id = a.id WHERE m.to_agent_id = ? AND m.read = 0`).all(id) as any[];
             const pendingTask = db.prepare("SELECT id, description FROM tasks WHERE agent_id = ? AND status = 'pending' ORDER BY created_at ASC LIMIT 1").get(id) as any;
 
@@ -609,9 +674,11 @@ export class BrainManager {
                 if (toolFailed) {
                     console.log(`[${agent.name}] ❌ TOOL FAIL: ${res.tool_name} output=${outPreview}`);
                     brain.addIncomingMessage('SYSTEM', `Falha em ${res.tool_name}: ${outText}`);
+                    brain.incrementFailure(res.tool_name);
                 } else {
                     console.log(`[${agent.name}] ✅ TOOL OK: ${res.tool_name} output=${outPreview}`);
                     brain.addIncomingMessage('SYSTEM', `Resultado de ${res.tool_name}: ${outText}`);
+                    brain.resetFailure();
                 }
 
                 try {

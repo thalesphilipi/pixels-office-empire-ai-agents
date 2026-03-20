@@ -125,7 +125,12 @@ const mcpTools: Record<string, Tool> = {
                 // Security: prevent path traversal
                 if (!fullPath.startsWith(WORKSPACE_ROOT)) return 'Erro: Caminho inválido.';
                 const content = await fs.readFile(fullPath, 'utf-8');
-                return `Conteúdo de ${args.path}:\n\n${content.substring(0, 5000)}`;
+
+                const maxChars = 3000;
+                if (content.length > maxChars) {
+                    return `Conteúdo de ${args.path}:\n\n${content.substring(0, maxChars)}\n\n...[TRUNCADO. Use mcp_fs_read_range para ler em partes]`;
+                }
+                return `Conteúdo de ${args.path}:\n\n${content}`;
             } catch (e: any) {
                 return `Erro ao ler arquivo: ${e.message}`;
             }
