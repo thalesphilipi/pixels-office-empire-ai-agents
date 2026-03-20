@@ -138,42 +138,32 @@ export function AgentManager({ onClose }: { onClose: () => void }) {
 
             {editingAgent ? (
                 <form onSubmit={handleSave} style={{ color: 'var(--pixel-text)' }}>
-                    <label>{t('Name')}</label>
-                    <input style={inputStyle} value={editingAgent.name} onChange={e => setEditingAgent({ ...editingAgent, name: e.target.value })} />
+                    <div style={{ marginBottom: '20px', padding: '10px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--pixel-border)' }}>
+                        <h3 style={{ margin: 0, color: 'var(--pixel-accent)' }}>Editando {editingAgent.name} ({editingAgent.role})</h3>
+                        <p style={{ fontSize: '12px', opacity: 0.7, margin: '5px 0 0 0' }}>Agência Turn-key: O Nome e a Role são fixos. Você pode otimizar o cérebro híbrido abaixo.</p>
+                    </div>
 
-                    <label>{t('Role')}</label>
-                    <select
-                        style={inputStyle}
-                        value={editingAgent.role}
-                        onChange={e => setEditingAgent({ ...editingAgent, role: e.target.value })}
-                    >
-                        {availableRoles.map(role => (
-                            <option key={role} value={role}>{t(role) || role}</option>
-                        ))}
-                    </select>
-
-                    <label>{t('System Prompt')}</label>
+                    <label>{t('System Prompt')} (Otimizado da Agência)</label>
                     <textarea style={{ ...inputStyle, height: '100px', resize: 'vertical' }} value={editingAgent.system_prompt || ''} onChange={e => setEditingAgent({ ...editingAgent, system_prompt: e.target.value })} />
 
-                    <label>{t('LLM Model')} (e.g., qwen3.5-9b-claude-4.6-opus-distilled-32k)</label>
-                    <input style={inputStyle} value={editingAgent.llm_model || ''} onChange={e => setEditingAgent({ ...editingAgent, llm_model: e.target.value })} />
+                    <h3 style={{ marginTop: '20px', borderBottom: '1px solid var(--pixel-border)', paddingBottom: '10px' }}>🧠 Configuração de Cérebro Híbrido</h3>
 
-                    <label>{t('OpenRouter API Key')}</label>
-                    <input type="password" style={inputStyle} value={editingAgent.llm_api_key || ''} onChange={e => setEditingAgent({ ...editingAgent, llm_api_key: e.target.value })} />
+                    <label>{t('LLM Model')} (Deixe vazio para usar a RTX 4060 Local ou preencha ex: anthropic/claude-3.5-sonnet)</label>
+                    <input style={inputStyle} value={editingAgent.llm_model || ''} onChange={e => setEditingAgent({ ...editingAgent, llm_model: e.target.value })} placeholder="anthropic/claude-3.5-sonnet" />
 
-                    <label>{t('API Base URL')} (ex: http://localhost:11434/v1)</label>
-                    <input style={inputStyle} value={editingAgent.llm_base_url || ''} onChange={e => setEditingAgent({ ...editingAgent, llm_base_url: e.target.value })} />
+                    <label>{t('OpenRouter API Key')} (Para usar Nuvem)</label>
+                    <input type="password" style={inputStyle} value={editingAgent.llm_api_key || ''} onChange={e => setEditingAgent({ ...editingAgent, llm_api_key: e.target.value })} placeholder="sk-or-v1-..." />
 
-                    <div style={{ display: 'flex', gap: '10px' }}>
+                    <label>{t('API Base URL')} (Para Cloud ex: https://openrouter.ai/api/v1)</label>
+                    <input style={inputStyle} value={editingAgent.llm_base_url || ''} onChange={e => setEditingAgent({ ...editingAgent, llm_base_url: e.target.value })} placeholder="https://openrouter.ai/api/v1" />
+
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                         <button type="submit" style={btnStyle}>{t('Save')}</button>
                         <button type="button" style={{ ...btnStyle, background: 'var(--pixel-danger-bg)' }} onClick={() => setEditingAgent(null)}>{t('Cancel')}</button>
                     </div>
                 </form>
             ) : (
                 <>
-                    <button style={{ ...btnStyle, background: 'var(--pixel-accent)', marginBottom: '20px' }} onClick={handleHire}>
-                        + {t('Hire Agent')}
-                    </button>
                     <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', color: 'var(--pixel-text)' }}>
                         <thead>
                             <tr style={{ borderBottom: '2px solid var(--pixel-border)' }}>
