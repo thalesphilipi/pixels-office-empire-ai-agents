@@ -267,10 +267,6 @@ export function initDb() {
         }
     } catch (e) { }
 
-    try {
-        db.prepare('UPDATE agents SET llm_model = ?').run('qwen3.5-9b-claude-4.6-opus-distilled-32k');
-    } catch (e) { }
-
     console.log('[Database] Initialized SQLite schema at', dbPath);
     return db;
 }
