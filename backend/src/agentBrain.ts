@@ -700,11 +700,39 @@ export class BrainManager {
             // Circuit Breaker: prevent stuck agents
             const fails = brain.getFailures();
             if (fails.count >= 3) {
-                console.log(`[${agent.name}] 🛑 CIRCUIT BREAKER ATIVADO (3 falhas seguidas na tool: ${fails.tool || 'desconhecida'}). Pedindo ajuda.`);
-                this.callbacks.onAskHuman?.(agent.name, `Estou travado! Falhei 3 vezes seguidas tentando usar a ferramenta "${fails.tool || 'desconhecida'}". Preciso de ajuda ou que mude minha tarefa.`);
+                console.log(`[${agent.name}] 🛑 CIRCUIT BREAKER ATIVADO (3 falhas seguidas na tool: ${fails.tool || 'desconhecida'}). Canceling active task.`);
+                this.callbacks.onAskHuman?.(agent.name, `Estou travado! Cancelei minha tarefa após falhar 3 vezes seguidas tentando usar a ferramenta "${fails.tool || 'desconhecida'}". Verifique o que deu errado.`);
 
-                brain.addIncomingMessage('SYSTEM', `Você falhou 3 vezes seguidas. Pare de tentar a mesma coisa. O Dono foi notificado.`);
-                db.prepare('INSERT INTO messages (id, from_agent_id, to_agent_id, content) VALUES (?, ?, ?, ?)').run(`m_${Date.now()}`, id, 'HUMAN', `Estou preso em loop tentando executar ${fails.tool || 'uma ação'}.`);
+                brain.addIncomingMessage('SYSTEM', `Você falhou 3 vezes seguidas. Tarefa cancelada. O Dono foi notificado.`);
+                db.prepare('INSERT INTO messages (id, from_agent_id, to_agent_id, content) VALUES (?, ?, ?, ?)').run(`m_${Date.now()}`, id, 'HUMAN', `Estou preso em loop tentando executar ${fails.tool || 'uma ação'}. Minha tarefa foi cancelada.`);
+
+                // Cascading Failure: Encontrar a task ativa, cancelar ela e todos os seus dependentes
+                try {
+                    const activeTask = db.prepare(`
+                        SELECT t.id
+                        FROM tasks t
+                        LEFT JOIN tasks dep ON t.depends_on = dep.id
+                        WHERE t.agent_id = ? AND t.status = 'pending'
+                        AND (t.depends_on IS NULL OR t.depends_on = '' OR dep.status = 'completed')
+                        ORDER BY t.created_at ASC LIMIT 1
+                    `).get(id) as any;
+
+                    if (activeTask && activeTask.id) {
+                         db.prepare('UPDATE tasks SET status = ? WHERE id = ?').run('error', activeTask.id);
+                         let affectedCount = 1;
+                         // Acha filhos
+                         let children = db.prepare("SELECT id FROM tasks WHERE depends_on = ? AND status = 'pending'").all(activeTask.id) as any[];
+                         while (children.length > 0) {
+                              const childIds = children.map(c => `'${c.id}'`).join(',');
+                              db.prepare(`UPDATE tasks SET status = 'error' WHERE id IN (${childIds})`).run();
+                              affectedCount += children.length;
+                              // Acha netos
+                              children = db.prepare(`SELECT id FROM tasks WHERE depends_on IN (${childIds}) AND status = 'pending'`).all() as any[];
+                         }
+                         console.log(`[${agent.name}] 💥 EFEITO DOMINÓ: A tarefa principal falhou. ${affectedCount - 1} tarefas dependentes também foram marcadas com erro.`);
+                    }
+                } catch(e) {}
+
                 brain.resetFailure();
 
                 // Let the agent skip this turn and wait for human input
@@ -825,17 +853,36 @@ export class BrainManager {
 
             if (res.action === 'complete_task') {
                 const current = db.prepare(`
-                    SELECT t.id
+                    SELECT t.id, t.description
                     FROM tasks t
                     LEFT JOIN tasks dep ON t.depends_on = dep.id
                     WHERE t.agent_id = ? AND t.status = 'pending'
                     AND (t.depends_on IS NULL OR t.depends_on = '' OR dep.status = 'completed')
                     ORDER BY t.created_at ASC LIMIT 1
                 `).get(id) as any;
+
                 const taskId = (res.task_id || current?.id || '').toString();
                 if (taskId) {
                     console.log(`[${agent.name}] ✅ TAREFA CONCLUÍDA: ${taskId}`);
                     db.prepare('UPDATE tasks SET status = ? WHERE id = ?').run('completed', taskId);
+
+                    // Auto-Resumo Post-Mortem (Destilação de Experiência)
+                    // Pega o conteúdo gerado pelo agente ou a descrição original
+                    const exp = (res.content || res.thought || current?.description || '').toString().trim();
+                    if (exp.length > 30) {
+                         const title = `Lições Aprendidas: Task ${taskId.slice(-6)}`;
+                         const safeExp = exp.slice(0, 1000);
+                         try {
+                              db.prepare('INSERT INTO knowledge_base (id, category, title, content, author_id) VALUES (?, ?, ?, ?, ?)').run(
+                                  `kb_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
+                                  'tech_stack',
+                                  title,
+                                  `O agente ${agent.name} (${agent.role}) concluiu a tarefa e registrou:\n${safeExp}`,
+                                  id
+                              );
+                              console.log(`[${agent.name}] 🧠 Memória Post-Mortem guardada no Knowledge Base.`);
+                         } catch (e) { }
+                    }
                 } else {
                     brain.addIncomingMessage('SYSTEM', 'complete_task sem task_id e sem task pendente.');
                 }
