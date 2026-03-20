@@ -331,16 +331,20 @@ export class AgentBrain {
 
         return `${rolePrompt} ${customPrompt}`.trim() + `
 Regras OBRIGATÓRIAS:
-1. Responda APENAS um JSON válido. Sem Markdown, sem crases, sem tags HTML ou XML (NÃO use <think>).
-2. Se "action": "use_tool", OBRIGATÓRIO informar "tool_name" e "tool_args".
-3. NÃO gere arquivos de código gigantes. Use "mcp_scaffold_project" para iniciar. Se precisar editar, crie partes pequenas (< 90 linhas).
-4. No campo "thought", seja extremamente breve e foque no Próximo Passo para atingir o objetivo (1 frase).
-5. Se falhar na mesma ação 3 vezes, retorne action: "idle".
+1. Você pode PENSAR LIVREMENTE antes de agir escrevendo seus raciocínios dentro das tags <think> e </think>.
+2. Após fechar a tag </think> (se a usar), o resto da sua resposta DEVE SER EXATAMENTE E APENAS um JSON válido. Sem Markdown de código, sem textos extras no final.
+3. Se "action": "use_tool", OBRIGATÓRIO informar "tool_name" e "tool_args".
+4. NÃO gere arquivos de código gigantes de uma vez. Use "mcp_scaffold_project" para iniciar. Se precisar editar, crie ou altere partes pequenas (< 90 linhas).
+5. No campo "thought" do JSON, faça um resumo de 1 frase do seu plano.
+6. Se falhar na mesma ação 3 vezes, desista e retorne action: "idle".
 
 📚 Ferramentas Disponíveis (Tool Manifest):
 ${availableTools}
 
 Formato esperado:
+<think>
+(Seus rascunhos mentais e lógica profunda)
+</think>
 {"action":"[use_tool|send_message|complete_task|idle]","thought":"...","content":"...","tool_name":"...","tool_args":{...}}`;
     }
 
@@ -586,7 +590,7 @@ Formato esperado:
                         attemptedRepair = true;
                         const repairedText = await call(
                             160,
-                            `Atenção: Sua última saída não foi um JSON válido (erro: "${lastParseError}"). Por favor, corrija seu erro.\nRetorne estritamente um objeto JSON com chaves: "action", "thought" (opcional), "tool_name", "tool_args" e "content".\nSe for escrever código HTML/JS/CSS, use "\\n" para quebras de linha ou mantenha o código compacto.\n\nJSON CORRIGIDO:`
+                            `Atenção: A sua tentativa anterior não foi um JSON válido (Erro do Parser: "${lastParseError}"). Por favor, TENTE NOVAMENTE. Certifique-se de usar <think>...</think> se precisar, MAS conclua APENAS com o JSON exato.\n\nJSON CORRIGIDO:`
                         );
                         if (repairedText) {
                             try {
@@ -692,6 +696,9 @@ export class BrainManager {
     async process(id: string) {
         if (this.processing.has(id)) return;
         this.processing.add(id);
+
+        let needsFastTrack = false;
+
         try {
             const brain = this.brains.get(id);
             const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(id) as any;
@@ -788,6 +795,9 @@ export class BrainManager {
                 const info = res.tool_args?.path || res.tool_args?.project_name || res.tool_args?.query || '';
                 const argsPreview = safeJsonPreview(res.tool_args || {}, 360);
                 console.log(`[${agent.name}] 🛠️  TOOL: ${res.tool_name} ${info ? `(${info})` : ''} args=${argsPreview}`);
+
+                // Ativar modo contínuo (Fast Track) para execução de ferramenta
+                needsFastTrack = true;
 
                 // Emit activity for visual feedback before execution
                 let act = 'coding';
@@ -891,8 +901,13 @@ export class BrainManager {
             this.callbacks.onStatus?.(id, 'waiting');
         } catch (e: any) {
             console.error(`[BrainManager] Erro no ${id}:`, e.message);
+            needsFastTrack = false;
         } finally {
             this.processing.delete(id);
+            // Re-enfileirar quase imediatamente (Fast Track) se o agente não esteve "idle"
+            if (needsFastTrack) {
+                setTimeout(() => this.process(id), 2000);
+            }
         }
     }
 
