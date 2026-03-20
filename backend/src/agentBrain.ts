@@ -420,15 +420,24 @@ Formato esperado:
     }
 
     async think(inbox: Message[]): Promise<ThinkResult> {
+        // --- NUVEM HÍBRIDA (LOCAL + CLOUD POR AGENTE) ---
         let apiKey = this.config.llm_api_key || process.env.LLM_API_KEY || null;
         if (!apiKey) {
-            const row = db.prepare("SELECT key_value FROM vault WHERE key_id = 'openrouter_key'").get() as any;
-            apiKey = row?.key_value || null;
+            // Fallback para OpenRouter se disponível no Cofre
+            try {
+                const row = db.prepare("SELECT key_value FROM vault WHERE key_id = 'openrouter_key' OR service = 'openrouter' LIMIT 1").get() as any;
+                apiKey = row?.key_value || null;
+            } catch (e) {}
         }
 
-        const localModel = TIERS.PRIORITY_LOCAL;
-        // Agora a fila contém EXCLUSIVAMENTE o modelo local.
-        const queue = [localModel];
+        const model = this.config.llm_model || TIERS.PRIORITY_LOCAL;
+        const baseUrl = this.config.llm_base_url || (
+             (model.includes('gpt') || model.includes('claude') || model.includes('gemini') || model.includes('anthropic') || model.includes('openai'))
+             ? 'https://openrouter.ai/api/v1'
+             : (process.env.LLM_BASE_URL || 'http://host.docker.internal:1234/v1')
+        );
+
+        const isLocal = !baseUrl.includes('openrouter') && !baseUrl.includes('openai');
 
         const system = this.buildSystemPrompt();
         const user = this.buildUserPrompt(inbox);
@@ -444,13 +453,10 @@ Formato esperado:
         let attemptedRepair = false;
         let attemptedRepair2 = false;
 
-        for (let i = 0; i < queue.length; i++) {
-            const model = queue[i];
-            const isLocal = model === localModel;
-            const baseUrl = isLocal ? (process.env.LLM_BASE_URL || 'http://host.docker.internal:1234/v1') : 'https://openrouter.ai/api/v1';
-
+        for (let i = 0; i < 1; i++) {
             try {
-                if (isLocal) console.log(`[${this.config.name}] Usando Inteligência LOCAL (${model}) | base_url=${baseUrl}`);
+                const badge = isLocal ? 'LOCAL 🏠' : 'NUVEM ☁️';
+                console.log(`[${this.config.name}] Usando Inteligência ${badge} (${model})`);
 
                 // Formatação RIGOROSA para LM Studio (Templates Jinja/Qwen)
                 // O erro "No user query found" ocorre se não terminarmos com USER
@@ -656,7 +662,14 @@ export class BrainManager {
             console.log('\n' + '═'.repeat(60));
             console.log(`🤖 RODADA DE PENSAMENTO INICIADA (${ids.length} agentes ativos)`);
             console.log('═'.repeat(60));
-            for (const id of ids) await this.process(id);
+
+            // Execução paralela com controle simples de concorrência (ex: max 2 ou 3 por vez para não derreter o LM Studio Local)
+            const CONCURRENCY_LIMIT = 3;
+            for (let i = 0; i < ids.length; i += CONCURRENCY_LIMIT) {
+                const batch = ids.slice(i, i + CONCURRENCY_LIMIT);
+                await Promise.all(batch.map(id => this.process(id)));
+            }
+
             console.log('─'.repeat(40));
             console.log(`💤 Rodada finalizada. Próxima em ${ms / 1000}s.`);
             console.log('─'.repeat(40) + '\n');
