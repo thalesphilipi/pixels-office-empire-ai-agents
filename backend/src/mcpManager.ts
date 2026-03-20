@@ -137,6 +137,124 @@ const mcpTools: Record<string, Tool> = {
         }
     },
 
+    'mcp_fs_replace_line': {
+        name: 'mcp_fs_replace_line',
+        description: '[MCP Filesystem] Usado para autocorreção focada. Substitui EXATAMENTE UMA LINHA de código onde o linter detectou erro.',
+        parameters: {
+            type: 'object',
+            properties: {
+                path: { type: 'string', description: 'Caminho do arquivo (ex: js/app.js)' },
+                line_number: { type: 'number', description: 'Número da linha reportada pelo erro (1-indexed)' },
+                new_code: { type: 'string', description: 'O código corrigido para essa linha' }
+            },
+            required: ['path', 'line_number', 'new_code']
+        },
+        execute: async (args: any) => {
+            try {
+                await ensureWorkspace();
+                const fullPath = path.join(WORKSPACE_ROOT, args.path);
+                if (!fullPath.startsWith(WORKSPACE_ROOT)) return 'Erro: Caminho inválido.';
+                const lineNum = Math.max(1, Number(args.line_number || 1));
+                const newCode = (args.new_code ?? '').toString();
+
+                const content = await fs.readFile(fullPath, 'utf-8');
+                const lines = content.split('\n');
+
+                if (lineNum > lines.length) return `Erro: O arquivo tem apenas ${lines.length} linhas. A linha ${lineNum} não existe.`;
+
+                const oldCode = lines[lineNum - 1];
+                lines[lineNum - 1] = newCode;
+
+                await fs.writeFile(fullPath, lines.join('\n'), 'utf-8');
+                return `✅ Autocorreção na linha ${lineNum} do arquivo ${args.path}.\nDe:   ${oldCode}\nPara: ${newCode}`;
+            } catch (e: any) {
+                return `Erro na autocorreção: ${e.message}`;
+            }
+        }
+    },
+
+    'mcp_finance_payroll': {
+        name: 'mcp_finance_payroll',
+        description: '[MCP Business] Processa a folha de pagamento da empresa. Executar apenas 1x por dia útil para deduzir do caixa da empresa e pagar os agentes.',
+        parameters: {
+            type: 'object',
+            properties: {},
+            required: []
+        },
+        execute: async (args: any, context: ToolContext) => {
+            try {
+                const { db } = await import('./db.js');
+                const company = db.prepare("SELECT cash FROM company WHERE id = 'default'").get() as any;
+                let cash = Number(company?.cash || 0);
+
+                const agents = db.prepare("SELECT agent_id, salary FROM agent_finance WHERE salary > 0").all() as any[];
+                let totalPaid = 0;
+                let paidAgents = 0;
+                let msgs = [];
+
+                for (const a of agents) {
+                    const sal = Number(a.salary || 0);
+                    if (sal <= 0) continue;
+
+                    if (cash >= sal) {
+                        // Pay agent
+                        db.prepare("UPDATE agent_finance SET bank_balance = bank_balance + ?, last_payroll_at = CURRENT_TIMESTAMP WHERE agent_id = ?").run(sal, a.agent_id);
+                        db.prepare("UPDATE company SET cash = cash - ? WHERE id = 'default'").run(sal);
+                        cash -= sal;
+                        totalPaid += sal;
+                        paidAgents++;
+
+                        // Register transaction
+                        const txId = `tx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+                        db.prepare("INSERT INTO agent_transactions (id, agent_id, tx_type, amount, memo) VALUES (?, ?, ?, ?, ?)").run(
+                            txId, a.agent_id, 'payroll', sal, 'Salário pago via mcp_finance_payroll'
+                        );
+                    } else {
+                        msgs.push(`⚠️ CAIXA INSUFICIENTE para pagar agente ${a.agent_id} ($${sal}).`);
+                    }
+                }
+
+                if (msgs.length > 0) {
+                    db.prepare('INSERT INTO messages (id, from_agent_id, to_agent_id, content) VALUES (?, ?, ?, ?)').run(`m_${Date.now()}`, context.agentId, 'HUMAN', `🚨 URGENTE CFO: O Caixa da empresa não tem dinheiro para cobrir toda a folha de pagamento! Faltou pagar ${agents.length - paidAgents} agentes. Risco de revolta.`);
+                } else if (paidAgents > 0) {
+                    db.prepare('INSERT INTO messages (id, from_agent_id, to_agent_id, content) VALUES (?, ?, ?, ?)').run(`m_${Date.now()}`, context.agentId, 'ALL', `💸 O pagamento de vocês caiu na conta! Total distribuído: $${totalPaid.toFixed(2)}. Vejam seus saldos e pensem em investir em upgrades de turno!`);
+                }
+
+                return `💸 Folha processada. Pagos: ${paidAgents} agentes. Total: $${totalPaid}. Caixa restante: $${cash.toFixed(2)}.\n${msgs.join('\n')}`;
+            } catch (e: any) {
+                return `Erro no Payroll: ${e.message}`;
+            }
+        }
+    },
+
+    'mcp_finance_revenue': {
+        name: 'mcp_finance_revenue',
+        description: '[MCP Business] Simula a entrada de receita ($$$) na empresa de um projeto ou tarefa entregue com sucesso.',
+        parameters: {
+            type: 'object',
+            properties: {
+                project_name: { type: 'string', description: 'Nome do projeto ou divisão' },
+                amount: { type: 'number', description: 'Valor da receita (USD) entre 10 e 1000' }
+            },
+            required: ['project_name', 'amount']
+        },
+        execute: async (args: any, context: ToolContext) => {
+            try {
+                const { db } = await import('./db.js');
+                const amt = Math.max(1, Math.min(10000, Number(args.amount || 50)));
+                const proj = (args.project_name || 'Projeto Desconhecido').toString().trim();
+
+                db.prepare("UPDATE company SET cash = cash + ? WHERE id = 'default'").run(amt);
+
+                db.prepare('INSERT INTO messages (id, from_agent_id, to_agent_id, content) VALUES (?, ?, ?, ?)').run(`m_${Date.now()}`, context.agentId, 'ALL', `💰 Boas notícias! Fechamos o projeto "${proj}" e recebemos $${amt.toFixed(2)} de receita. O caixa da empresa agradece!`);
+
+                return `✅ Receita de $${amt.toFixed(2)} computada no caixa da empresa referente ao projeto "${proj}".`;
+            } catch (e: any) {
+                return `Erro ao computar receita: ${e.message}`;
+            }
+        }
+    },
+
     'mcp_fs_read_range': {
         name: 'mcp_fs_read_range',
         description: '[MCP Filesystem] Lê um trecho (range de linhas) de um arquivo do projeto.',

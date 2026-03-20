@@ -81,6 +81,7 @@ export function TaskManager({ onClose }: { onClose: () => void }) {
                         <th>{t('ID')}</th>
                         <th>{t('Agent')}</th>
                         <th>{t('Description')}</th>
+                        <th>Grafo</th>
                         <th>{t('Status')}</th>
                         <th>{t('Created At')}</th>
                     </tr>
@@ -91,7 +92,8 @@ export function TaskManager({ onClose }: { onClose: () => void }) {
                             <td style={{ padding: '8px' }}>{t.id.slice(-6)}</td>
                             <td>{t.agent_name || 'System'}</td>
                             <td>{t.description}</td>
-                            <td>{t.status}</td>
+                            <td style={{ color: '#f55' }}>{t.depends_on ? `🔒 ${t.depends_on.slice(-6)}` : ''}</td>
+                            <td style={{ color: t.status === 'completed' ? '#0f0' : t.status === 'pending' ? '#ff0' : '#fff' }}>{t.status}</td>
                             <td>{new Date(t.created_at).toLocaleString()}</td>
                         </tr>
                     ))}
