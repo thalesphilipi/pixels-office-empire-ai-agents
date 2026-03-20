@@ -579,16 +579,15 @@ async function initServer() {
     // ── Admin: Reset runtime data (keeps vault) ─────────────────
     app.post('/api/admin/reset', (_req, res) => {
         try {
-            const seedMode = (process.env.PIXEL_AGENTS_SEED || '').toString().trim().toLowerCase();
-            const shouldSeed = seedMode === '1' || seedMode === 'true' || seedMode === 'yes';
-
             db.prepare('DELETE FROM approvals').run();
             db.prepare('DELETE FROM messages').run();
             db.prepare('DELETE FROM tasks').run();
             db.prepare('DELETE FROM knowledge_base').run();
             db.prepare('DELETE FROM divisions').run();
 
-            db.prepare('UPDATE agents SET division_id = NULL, memory = NULL').run();
+            // Em vez de apenas atualizar, DEMITIMOS todo mundo (DELETE) para garantir a integridade do Dream Team
+            db.prepare('DELETE FROM agents').run();
+
             db.prepare("UPDATE company SET name = ?, mission = ?, cash = 1000.0 WHERE id = 'default'").run(
                 'Pixels Office Empire',
                 'Operar um escritório virtual de agentes autônomos para executar projetos e gerar resultado no mundo real.',
@@ -608,30 +607,42 @@ async function initServer() {
 
             brainManager.resetAllBrains();
 
-            const agentIds = db.prepare('SELECT id FROM agents').all() as Array<{ id: string }>;
-            for (const a of agentIds) {
-                const numId = Number(a.id.slice(-6)) || 0;
-                io.emit('message', { type: 'agentToolsClear', id: numId });
-                io.emit('message', { type: 'agentStatus', id: numId, status: 'waiting' });
-                io.emit('message', { type: 'agentActivity', agentId: a.id, activity: 'idle', detail: 'reset' });
-            }
+            // Broadcast para limpar a tela
+            io.emit('message', { type: 'agentClosed', id: 0 }); // frontend lida com resets melhor dando refresh
 
+            // Recriar o Dream Team
             const divisionId = `div_calc_factory_${Date.now().toString(36)}`;
             db.prepare('INSERT INTO divisions (id, title, objective_prompt, status) VALUES (?, ?, ?, ?)').run(
                 divisionId,
-                'Fábrica de Calculadoras',
-                'Entregar calculadoras simples (1 por subdomínio), com SEO básico, deploy via FTP e monitoramento de visitas via tracker local (PHP). Regras: 1 ação por vez; sempre usar ferramentas; nada de planejamento longo.',
+                'Agência Turn-Key',
+                'Aguardando o CEO usar mcp_create_pipeline para iniciar os trabalhos.',
                 'active'
             );
-            db.prepare('UPDATE agents SET division_id = ?').run(divisionId);
 
-            const agents = db.prepare('SELECT id, name, role FROM agents ORDER BY created_at ASC').all() as Array<{ id: string; name: string; role: string }>;
+            const base = Date.now();
+            const agentsToCreate = [
+                { name: 'Alice', role: 'CEO' },
+                { name: 'Carlos', role: 'CTO' },
+                { name: 'Eduardo', role: 'Dev Fullstack' },
+                { name: 'Diana', role: 'QA Tester' },
+                { name: 'Marcos', role: 'Growth/SEO' }
+            ];
+
+            const insertAgent = db.prepare(`
+                INSERT INTO agents (id, name, role, permissions, system_prompt, llm_model, llm_api_key, llm_base_url, division_id)
+                VALUES (?, ?, ?, '[]', ?, NULL, NULL, NULL, ?)
+            `);
             const insertTask = db.prepare('INSERT OR IGNORE INTO tasks (id, agent_id, division_id, description, status) VALUES (?, ?, ?, ?, ?)');
-            for (const a of agents) {
+
+            for (let i = 0; i < agentsToCreate.length; i++) {
+                const a = agentsToCreate[i];
+                const id = String(base + i);
+                let prompt = getRolePrompt(a.role);
+                insertAgent.run(id, a.name, a.role, prompt, divisionId);
+
                 if (a.role === 'CEO') {
-                    const taskId = `task_seed_${divisionId}_${a.id}`;
-                    insertTask.run(taskId, a.id, divisionId, 'Bem-vinda de volta à agência pós-reset! Use a ferramenta mcp_create_pipeline para iniciar um projeto de calculadora simples.', 'pending');
-                    setTimeout(() => void brainManager.process(a.id), 150);
+                    insertTask.run(`task_seed_${divisionId}_${id}`, id, divisionId, 'A agência foi resetada e a equipe original contratada novamente. Aguardando você criar o primeiro pipeline do dia via mcp_create_pipeline.', 'pending');
+                    setTimeout(() => void brainManager.process(id), 150);
                 }
             }
 
