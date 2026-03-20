@@ -15,18 +15,24 @@ import { chromium, Browser, Page } from 'playwright';
 
 // Browser singleton state
 let globalBrowser: Browser | null = null;
-let globalPage: Page | null = null;
 
-async function getBrowserPage(): Promise<Page> {
+async function getBrowser(): Promise<Browser> {
     if (!globalBrowser) {
         globalBrowser = await chromium.launch({ headless: true });
-        const context = await globalBrowser.newContext({
-            viewport: { width: 1280, height: 800 },
-            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        });
-        globalPage = await context.newPage();
     }
-    return globalPage!;
+    return globalBrowser;
+}
+
+// Em vez de retornar a globalPage (que causa memory leak se não for fechada ou acessada paralelamente)
+// Retornamos um objeto context+page isolado e descartável
+async function createIsolatedPage() {
+    const browser = await getBrowser();
+    const context = await browser.newContext({
+        viewport: { width: 1280, height: 800 },
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    });
+    const page = await context.newPage();
+    return { context, page };
 }
 
 const execAsync = promisify(exec);
@@ -802,7 +808,7 @@ Use este framework para organizar seu raciocínio e responda com sua análise co
 
     'mcp_browser_goto': {
         name: 'mcp_browser_goto',
-        description: '[MCP Browser] Abre uma URL no navegador real do agente (suporta SPAs e sites dinâmicos). Retorna o título e texto visível.',
+        description: '[MCP Browser] Abre uma URL em um navegador Headless ISOLADO e pega o texto da tela (fecha após ler). Ideal para pesquisas ou checar se um site está no ar.',
         parameters: {
             type: 'object',
             properties: {
@@ -811,94 +817,65 @@ Use este framework para organizar seu raciocínio e responda com sua análise co
             required: ['url']
         },
         execute: async (args: any) => {
+            let session;
             try {
-                const page = await getBrowserPage();
-                await page.goto(args.url, { waitUntil: 'domcontentloaded', timeout: 15000 });
-                const title = await page.title();
-                const textContent = await page.evaluate(() => document.body.innerText.substring(0, 2000));
+                session = await createIsolatedPage();
+                await session.page.goto(args.url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+                const title = await session.page.title();
+                const textContent = await session.page.evaluate(() => document.body.innerText.substring(0, 2000));
                 return `✅ Navegou para: ${args.url}\n📌 Título: ${title}\n\n[Trecho Visível]\n${textContent.replace(/\\s+/g, ' ')}`;
             } catch (e: any) {
                 return `❌ Erro de navegação: ${e.message}`;
+            } finally {
+                if (session?.context) await session.context.close();
             }
         }
     },
 
     'mcp_browser_click': {
         name: 'mcp_browser_click',
-        description: '[MCP Browser] Clica em um elemento na tela usando seletores (CSS, XPath ou Texto).',
-        parameters: {
-            type: 'object',
-            properties: {
-                selector: { type: 'string', description: 'Seletor CSS ou texto (ex: button, .btn-submit, text="Comprar")' }
-            },
-            required: ['selector']
-        },
-        execute: async (args: any) => {
-            try {
-                const page = await getBrowserPage();
-                // Playwright allows text="xxx" pseudo-selector automatically
-                await page.click(args.selector, { timeout: 5000 });
-                return `✅ Clicou em: ${args.selector}.`;
-            } catch (e: any) {
-                return `❌ Erro ao clicar: ${e.message}`;
-            }
-        }
+        description: '[DEPRECATED] Interação com browser (Click) desativada temporariamente. Devido ao modo isolado sem estado, clique não terá efeito persistente.',
+        parameters: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] },
+        execute: async () => 'Ferramenta temporariamente desativada. Use mcp_fetch_page ou mcp_browser_goto para inspecionar.'
     },
 
     'mcp_browser_type': {
         name: 'mcp_browser_type',
-        description: '[MCP Browser] Digita um texto em um campo de input na tela atual.',
-        parameters: {
-            type: 'object',
-            properties: {
-                selector: { type: 'string', description: 'Seletor do input (ex: input[name="username"])' },
-                text: { type: 'string', description: 'Texto a ser digitado' }
-            },
-            required: ['selector', 'text']
-        },
-        execute: async (args: any) => {
-            try {
-                const page = await getBrowserPage();
-                await page.fill(args.selector, args.text, { timeout: 5000 });
-                return `✅ Preencheu ${args.selector} com: "${args.text}".`;
-            } catch (e: any) {
-                return `❌ Erro ao preencher: ${e.message}`;
-            }
-        }
+        description: '[DEPRECATED] Interação com browser (Type) desativada temporariamente. Devido ao modo isolado sem estado, digitação não terá efeito persistente.',
+        parameters: { type: 'object', properties: { selector: { type: 'string' }, text: { type: 'string' } }, required: ['selector', 'text'] },
+        execute: async () => 'Ferramenta temporariamente desativada. Use mcp_fetch_page ou mcp_browser_goto para inspecionar.'
     },
 
     'mcp_browser_screenshot': {
         name: 'mcp_browser_screenshot',
-        description: '[MCP Browser] Tira uma screenshot da página atual, converte em base64 (visão computacional) ou salva no disco.',
+        description: '[MCP Browser] Tira uma screenshot de uma página em um navegador ISOLADO e salva no disco. Ideal para QA visual.',
         parameters: {
             type: 'object',
             properties: {
-                path: { type: 'string', description: 'Caminho opcional para salvar a imagem (ex: screenshot.png)' }
-            }
+                url: { type: 'string', description: 'URL para capturar (OBRIGATÓRIO)' },
+                path: { type: 'string', description: 'Caminho para salvar a imagem (ex: screenshot.png) (OBRIGATÓRIO)' }
+            },
+            required: ['url', 'path']
         },
         execute: async (args: any) => {
+            let session;
             try {
-                const page = await getBrowserPage();
-                let savePath = undefined;
+                if (!args.url || !args.path) return 'Erro: url e path são obrigatórios.';
 
-                if (args.path) {
-                    savePath = path.join(WORKSPACE_ROOT, args.path);
-                    if (!savePath.startsWith(WORKSPACE_ROOT)) {
-                        return 'Erro: Caminho inválido (Tentativa de path traversal).';
-                    }
+                let savePath = path.join(WORKSPACE_ROOT, args.path);
+                if (!savePath.startsWith(WORKSPACE_ROOT)) {
+                    return 'Erro: Caminho inválido (Tentativa de path traversal).';
                 }
 
-                const buffer = await page.screenshot({ path: savePath, fullPage: false });
+                session = await createIsolatedPage();
+                await session.page.goto(args.url, { waitUntil: 'networkidle', timeout: 15000 });
+                await session.page.screenshot({ path: savePath, fullPage: true });
 
-                if (savePath) {
-                    return `📸 Screenshot salva com sucesso em: ${args.path}`;
-                } else {
-                    // Para agentes Vision-capable: passamos o Base64 Data URL (limite pequeno para exemplo)
-                    const base64 = buffer.toString('base64');
-                    return `[IMAGE_DATA_URL] data:image/png;base64,${base64.substring(0, 1500)}...[TRUNCATED]`;
-                }
+                return `📸 Screenshot de ${args.url} salva com sucesso em: ${args.path}`;
             } catch (e: any) {
                 return `❌ Erro ao tirar screenshot: ${e.message}`;
+            } finally {
+                if (session?.context) await session.context.close();
             }
         }
     },
