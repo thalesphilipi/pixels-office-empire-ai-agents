@@ -1406,7 +1406,17 @@ Próximos passos: Edite os arquivos com mcp_fs_write_file para personalizar.`;
                     env: { ...process.env, HOME: '/tmp' }
                 });
 
-                const output = (stdout + (stderr ? `\n[stderr]: ${stderr}` : '')).trim();
+                // Sanitização do Terminal: Remove códigos ANSI (cores), caracteres de controle e barras de progresso
+                const sanitize = (str: string) => {
+                    let clean = str.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
+                    // Remove "lixo" como spinners do npm, download bars etc.
+                    clean = clean.replace(/([⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]|(\[={1,}>?\s*\]))/g, '');
+                    // Collapse blank lines
+                    clean = clean.replace(/\n{3,}/g, '\n\n');
+                    return clean;
+                };
+
+                const output = (sanitize(stdout) + (stderr ? `\n[stderr]: ${sanitize(stderr)}` : '')).trim();
                 return `$ ${args.command}\n\n${output.substring(0, 4000)}`;
             } catch (e: any) {
                 // Melhorando a mensagem de erro para Timeout de comandos interativos
