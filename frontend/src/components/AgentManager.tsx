@@ -82,7 +82,7 @@ export function AgentManager({ onClose }: { onClose: () => void }) {
             setEditingAgent({
                 ...editingAgent,
                 llm_model: 'qwen3.5-4b-uncensored-hauhaucs-aggressive',
-                llm_base_url: 'http://127.0.0.1:1234/v1',
+                llm_base_url: 'http://host.docker.internal:1234/v1',
                 llm_api_key: 'lm-studio'
             });
         } else if (type === 'openrouter') {
@@ -134,7 +134,7 @@ export function AgentManager({ onClose }: { onClose: () => void }) {
 
                     <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
                         <button type="button" onClick={() => setPreset('lmstudio')} style={{ ...btnStyle, fontSize: '14px', padding: '8px 12px', background: '#3b82f6', borderColor: '#2563eb', marginBottom: 0 }}>
-                            🤖 Usar LM Studio Local (127.0.0.1:1234)
+                            🤖 Usar LM Studio Local (host.docker.internal)
                         </button>
                         <button type="button" onClick={() => setPreset('openrouter')} style={{ ...btnStyle, fontSize: '14px', padding: '8px 12px', background: '#8b5cf6', borderColor: '#7c3aed', marginBottom: 0 }}>
                             ☁️ Usar Nuvem (OpenRouter / Claude)
@@ -144,8 +144,8 @@ export function AgentManager({ onClose }: { onClose: () => void }) {
                     <label>{t('LLM Model')} (Ex: qwen3.5-4b-uncensored-hauhaucs-aggressive ou anthropic/claude-3.5-sonnet)</label>
                     <input style={inputStyle} value={editingAgent.llm_model || ''} onChange={e => setEditingAgent({ ...editingAgent, llm_model: e.target.value })} placeholder="Ex: qwen3.5-4b-uncensored-hauhaucs-aggressive" />
 
-                    <label>{t('API Base URL')} (Ex: http://127.0.0.1:1234/v1 para local ou https://openrouter.ai/api/v1 para Nuvem)</label>
-                    <input style={inputStyle} value={editingAgent.llm_base_url || ''} onChange={e => setEditingAgent({ ...editingAgent, llm_base_url: e.target.value })} placeholder="Ex: http://127.0.0.1:1234/v1" />
+                    <label>{t('API Base URL')} (Ex: http://host.docker.internal:1234/v1 para local ou https://openrouter.ai/api/v1 para Nuvem)</label>
+                    <input style={inputStyle} value={editingAgent.llm_base_url || ''} onChange={e => setEditingAgent({ ...editingAgent, llm_base_url: e.target.value })} placeholder="Ex: http://host.docker.internal:1234/v1" />
 
                     <label>{t('API Key')} (Qualquer valor para Local, ou sua sk-or-... para OpenRouter)</label>
                     <input type="password" style={inputStyle} value={editingAgent.llm_api_key || ''} onChange={e => setEditingAgent({ ...editingAgent, llm_api_key: e.target.value })} placeholder="Deixe em branco ou use lm-studio para local" />

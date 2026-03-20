@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { SettingsModal } from './SettingsModal.js'
 import { useTranslation } from 'react-i18next'
 
@@ -52,7 +52,6 @@ const btnActive: React.CSSProperties = {
 
 export function BottomToolbar({
   isEditMode,
-  onOpenClaude,
   onToggleEditMode,
   isDebugMode,
   onToggleDebugMode,
@@ -67,26 +66,7 @@ export function BottomToolbar({
   const { t } = useTranslation()
   const [hovered, setHovered] = useState<string | null>(null)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [llmMode, setLlmMode] = useState<'local' | 'agent' | null>(null)
-  const [llmModeLoading, setLlmModeLoading] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
-    fetch('http://localhost:3000/api/admin/llm/mode')
-      .then((r) => r.json())
-      .then((data) => {
-        if (cancelled) return
-        const mode = (data?.mode || '').toString().toLowerCase()
-        setLlmMode(mode === 'local' ? 'local' : 'agent')
-      })
-      .catch(() => {
-        if (cancelled) return
-        setLlmMode('agent')
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   return (
     <div style={panelStyle}>
