@@ -63,11 +63,10 @@ async function initServer() {
     // Init DB
     initDb();
     try {
-        const seedMode = (process.env.PIXEL_AGENTS_SEED || '').toString().trim().toLowerCase();
-        const shouldSeed = seedMode === '1' || seedMode === 'true' || seedMode === 'yes';
+        // Agora sempre cria os agentes iniciais (Dream Team Turn-key) se a tabela estiver vazia, ignorando o env var
         const row = db.prepare('SELECT COUNT(1) as c FROM agents').get() as any;
         const agentCount = Number(row?.c || 0);
-        if (shouldSeed && agentCount === 0) {
+        if (agentCount === 0) {
             const divisionId = 'div_calculators_global';
             const hasDivision = db.prepare('SELECT id FROM divisions WHERE id = ?').get(divisionId) as any;
             if (!hasDivision) {
@@ -364,7 +363,7 @@ async function initServer() {
     });
 
     app.get('/api/company', (req, res) => {
-        const company = db.prepare('SELECT name FROM company WHERE id = ?').get('default');
+        const company = db.prepare('SELECT name, cash FROM company WHERE id = ?').get('default');
         res.json(company);
     });
 
@@ -617,21 +616,21 @@ async function initServer() {
                 io.emit('message', { type: 'agentActivity', agentId: a.id, activity: 'idle', detail: 'reset' });
             }
 
-            if (shouldSeed) {
-                const divisionId = `div_calc_factory_${Date.now().toString(36)}`;
-                db.prepare('INSERT INTO divisions (id, title, objective_prompt, status) VALUES (?, ?, ?, ?)').run(
-                    divisionId,
-                    'Fábrica de Calculadoras',
-                    'Entregar calculadoras simples (1 por subdomínio), com SEO básico, deploy via FTP e monitoramento de visitas via tracker local (PHP). Regras: 1 ação por vez; sempre usar ferramentas; nada de planejamento longo.',
-                    'active'
-                );
-                db.prepare('UPDATE agents SET division_id = ?').run(divisionId);
+            const divisionId = `div_calc_factory_${Date.now().toString(36)}`;
+            db.prepare('INSERT INTO divisions (id, title, objective_prompt, status) VALUES (?, ?, ?, ?)').run(
+                divisionId,
+                'Fábrica de Calculadoras',
+                'Entregar calculadoras simples (1 por subdomínio), com SEO básico, deploy via FTP e monitoramento de visitas via tracker local (PHP). Regras: 1 ação por vez; sempre usar ferramentas; nada de planejamento longo.',
+                'active'
+            );
+            db.prepare('UPDATE agents SET division_id = ?').run(divisionId);
 
-                const agents = db.prepare('SELECT id, name, role FROM agents ORDER BY created_at ASC').all() as Array<{ id: string; name: string; role: string }>;
-                const insertTask = db.prepare('INSERT OR IGNORE INTO tasks (id, agent_id, division_id, description, status) VALUES (?, ?, ?, ?, ?)');
-                for (const a of agents) {
+            const agents = db.prepare('SELECT id, name, role FROM agents ORDER BY created_at ASC').all() as Array<{ id: string; name: string; role: string }>;
+            const insertTask = db.prepare('INSERT OR IGNORE INTO tasks (id, agent_id, division_id, description, status) VALUES (?, ?, ?, ?, ?)');
+            for (const a of agents) {
+                if (a.role === 'CEO') {
                     const taskId = `task_seed_${divisionId}_${a.id}`;
-                    insertTask.run(taskId, a.id, divisionId, 'EXECUTE AGORA: faça 1 passo concreto usando ferramentas.', 'pending');
+                    insertTask.run(taskId, a.id, divisionId, 'Bem-vinda de volta à agência pós-reset! Use a ferramenta mcp_create_pipeline para iniciar um projeto de calculadora simples.', 'pending');
                     setTimeout(() => void brainManager.process(a.id), 150);
                 }
             }

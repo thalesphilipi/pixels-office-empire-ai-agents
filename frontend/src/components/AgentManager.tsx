@@ -6,49 +6,50 @@ const panelStyle: React.CSSProperties = {
     inset: '40px',
     background: 'var(--pixel-bg)',
     border: '4px solid var(--pixel-border)',
-    boxShadow: '8px 8px 0px rgba(0,0,0,0.5)',
-    padding: '20px',
+    boxShadow: '12px 12px 0px rgba(0,0,0,0.5)',
+    padding: '30px',
     zIndex: 100,
-    overflowY: 'auto'
+    overflowY: 'auto',
+    fontFamily: '"Courier New", Courier, monospace'
 };
 
 const titleStyle: React.CSSProperties = {
-    fontSize: '32px',
-    color: 'var(--pixel-text)',
-    marginBottom: '20px',
-    borderBottom: '2px solid var(--pixel-border)',
-    paddingBottom: '10px'
+    fontSize: '38px',
+    color: 'var(--pixel-accent)',
+    marginBottom: '25px',
+    borderBottom: '4px solid var(--pixel-border)',
+    paddingBottom: '15px',
+    textTransform: 'uppercase',
+    textShadow: '2px 2px 0px #000'
 };
 
 const btnStyle: React.CSSProperties = {
-    padding: '8px 16px',
-    fontSize: '20px',
+    padding: '12px 24px',
+    fontSize: '22px',
+    fontWeight: 'bold',
     color: 'var(--pixel-text)',
     background: 'var(--pixel-btn-bg)',
-    border: '2px solid transparent',
+    border: '4px solid var(--pixel-border)',
     cursor: 'pointer',
-    marginBottom: '20px'
+    marginBottom: '20px',
+    textTransform: 'uppercase'
 };
 
 const inputStyle: React.CSSProperties = {
     width: '100%',
-    padding: '8px',
-    fontSize: '18px',
-    background: 'var(--pixel-bg)',
+    padding: '12px',
+    fontSize: '20px',
+    background: 'rgba(0,0,0,0.5)',
     border: '2px solid var(--pixel-border)',
-    color: 'var(--pixel-text)',
-    marginBottom: '15px'
+    color: '#fff',
+    marginBottom: '25px',
+    fontFamily: 'monospace'
 };
 
 export function AgentManager({ onClose }: { onClose: () => void }) {
     const { t } = useTranslation();
     const [agents, setAgents] = useState<any[]>([]);
     const [editingAgent, setEditingAgent] = useState<any | null>(null);
-    const [availableRoles, setAvailableRoles] = useState<string[]>([]);
-    const [hostingDomain, setHostingDomain] = useState('');
-    const [hostingIp, setHostingIp] = useState('');
-    const [hostingUser, setHostingUser] = useState('');
-    const [hostingPass, setHostingPass] = useState('');
 
     const fetchAgents = () => {
         fetch('http://localhost:3000/api/agents')
@@ -59,30 +60,7 @@ export function AgentManager({ onClose }: { onClose: () => void }) {
 
     useEffect(() => {
         fetchAgents();
-        fetch('http://localhost:3000/api/roles')
-            .then(res => res.json())
-            .then(data => setAvailableRoles(data))
-            .catch(console.error);
     }, []);
-
-    const saveHosting = async () => {
-        const entries = [
-            { key_id: 'hosting_domain', key_name: 'Hosting Domain', key_value: hostingDomain, service: 'hosting' },
-            { key_id: 'hosting_ftp_host', key_name: 'FTP Host/IP', key_value: hostingIp, service: 'hosting' },
-            { key_id: 'hosting_ftp_username', key_name: 'FTP Username', key_value: hostingUser, service: 'hosting' },
-            ...(hostingPass ? [{ key_id: 'hosting_ftp_password', key_name: 'FTP Password', key_value: hostingPass, service: 'hosting' }] : [])
-        ];
-        for (const e of entries) {
-            if (!e.key_value) continue;
-            await fetch('http://localhost:3000/api/vault', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(e)
-            });
-        }
-        setHostingPass('');
-        alert('Hosting salvo no Cofre. Os agentes já podem usar mcp_hosting_deploy_ftp.');
-    };
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -98,43 +76,10 @@ export function AgentManager({ onClose }: { onClose: () => void }) {
         fetchAgents();
     };
 
-    const handleHire = async () => {
-        await fetch('http://localhost:3000/api/agents', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: 'New Agent', role: 'Developer' })
-        });
-        fetchAgents();
-    };
-
-    const handleFire = async (id: string) => {
-        if (!confirm('Are you sure you want to fire this agent?')) return;
-
-        await fetch(`http://localhost:3000/api/agents/${id}`, {
-            method: 'DELETE'
-        });
-        fetchAgents();
-    };
-
     return (
         <div style={panelStyle}>
             <button style={{ float: 'right', ...btnStyle }} onClick={onClose}>{t('Close')}</button>
             <h2 style={titleStyle}>{t('Manage Staff (Agents)')}</h2>
-
-            <div style={{ border: '2px solid var(--pixel-border)', padding: '12px', marginBottom: '20px', color: 'var(--pixel-text)' }}>
-                <div style={{ fontSize: '22px', marginBottom: '10px' }}>Hosting (FTP / Subdomínios)</div>
-                <label>Domínio</label>
-                <input style={inputStyle} value={hostingDomain} onChange={e => setHostingDomain(e.target.value)} placeholder="instantcalc.info" />
-                <label>IP / Host do FTP</label>
-                <input style={inputStyle} value={hostingIp} onChange={e => setHostingIp(e.target.value)} placeholder="128.201.75.194" />
-                <label>Usuário FTP</label>
-                <input style={inputStyle} value={hostingUser} onChange={e => setHostingUser(e.target.value)} placeholder="instantcalc" />
-                <label>Senha FTP (não fica visível depois de salvar)</label>
-                <input type="password" style={inputStyle} value={hostingPass} onChange={e => setHostingPass(e.target.value)} placeholder="••••••••" />
-                <button style={{ ...btnStyle, background: 'var(--pixel-accent)', marginBottom: 0 }} onClick={saveHosting}>
-                    Salvar Hosting no Cofre
-                </button>
-            </div>
 
             {editingAgent ? (
                 <form onSubmit={handleSave} style={{ color: 'var(--pixel-text)' }}>
@@ -143,8 +88,8 @@ export function AgentManager({ onClose }: { onClose: () => void }) {
                         <p style={{ fontSize: '12px', opacity: 0.7, margin: '5px 0 0 0' }}>Agência Turn-key: O Nome e a Role são fixos. Você pode otimizar o cérebro híbrido abaixo.</p>
                     </div>
 
-                    <label>{t('System Prompt')} (Otimizado da Agência)</label>
-                    <textarea style={{ ...inputStyle, height: '100px', resize: 'vertical' }} value={editingAgent.system_prompt || ''} onChange={e => setEditingAgent({ ...editingAgent, system_prompt: e.target.value })} />
+                    <label style={{fontSize: '18px', fontWeight: 'bold'}}>{t('System Prompt')} (Otimizado da Agência)</label>
+                    <textarea style={{ ...inputStyle, height: '200px', resize: 'vertical', lineHeight: '1.5' }} value={editingAgent.system_prompt || ''} onChange={e => setEditingAgent({ ...editingAgent, system_prompt: e.target.value })} />
 
                     <h3 style={{ marginTop: '20px', borderBottom: '1px solid var(--pixel-border)', paddingBottom: '10px' }}>🧠 Configuração de Cérebro Híbrido</h3>
 
@@ -176,14 +121,13 @@ export function AgentManager({ onClose }: { onClose: () => void }) {
                         </thead>
                         <tbody>
                             {agents.map(a => (
-                                <tr key={a.id} style={{ borderBottom: '1px solid var(--pixel-border)' }}>
-                                    <td style={{ padding: '8px' }}>{a.id.slice(-6)}</td>
-                                    <td>{a.name}</td>
-                                    <td>{a.role}</td>
-                                    <td>{a.llm_model || 'None'}</td>
-                                    <td>
-                                        <button style={{ ...btnStyle, fontSize: '16px', padding: '4px 8px', marginBottom: 0, marginRight: '8px' }} onClick={() => setEditingAgent(a)}>{t('Edit')}</button>
-                                        <button style={{ ...btnStyle, fontSize: '16px', padding: '4px 8px', marginBottom: 0, background: 'var(--pixel-danger-bg)' }} onClick={() => handleFire(a.id)}>{t('Fire')}</button>
+                                <tr key={a.id} style={{ borderBottom: '2px solid var(--pixel-border)', background: 'rgba(255,255,255,0.02)' }}>
+                                    <td style={{ padding: '15px', fontSize: '18px' }}>{a.id.slice(-6)}</td>
+                                    <td style={{ padding: '15px', fontSize: '20px', fontWeight: 'bold', color: 'var(--pixel-accent)' }}>{a.name}</td>
+                                    <td style={{ padding: '15px', fontSize: '18px' }}>{a.role}</td>
+                                    <td style={{ padding: '15px', fontSize: '18px', color: '#ff5' }}>{a.llm_model || 'Local / Global'}</td>
+                                    <td style={{ padding: '15px' }}>
+                                        <button style={{ ...btnStyle, fontSize: '18px', padding: '8px 16px', marginBottom: 0, marginRight: '8px', background: '#080', borderColor: '#0f0' }} onClick={() => setEditingAgent(a)}>{t('Edit')}</button>
                                     </td>
                                 </tr>
                             ))}
