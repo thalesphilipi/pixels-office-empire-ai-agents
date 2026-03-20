@@ -321,6 +321,14 @@ export class AgentBrain {
     private buildSystemPrompt(): string {
         const rolePrompt = ROLE_PROMPTS[this.config.role] || `Você é um ${this.config.role}.`;
         const customPrompt = this.config.system_prompt || '';
+
+        // Sumário ultra-compacto das ferramentas para o agente "Lembrar" que elas existem
+        const availableTools = toolManager.getAvailableTools()
+            .map(t => {
+               const args = t.parameters?.required ? `(${t.parameters.required.join(', ')})` : '()';
+               return `- ${t.name}${args}`;
+            }).join('\n');
+
         return `${rolePrompt} ${customPrompt}`.trim() + `
 Regras OBRIGATÓRIAS:
 1. Responda APENAS um JSON válido. Sem Markdown, sem crases, sem tags HTML ou XML (NÃO use <think>).
@@ -328,6 +336,9 @@ Regras OBRIGATÓRIAS:
 3. NÃO gere arquivos de código gigantes. Use "mcp_scaffold_project" para iniciar. Se precisar editar, crie partes pequenas (< 90 linhas).
 4. No campo "thought", seja extremamente breve e foque no Próximo Passo para atingir o objetivo (1 frase).
 5. Se falhar na mesma ação 3 vezes, retorne action: "idle".
+
+📚 Ferramentas Disponíveis (Tool Manifest):
+${availableTools}
 
 Formato esperado:
 {"action":"[use_tool|send_message|complete_task|idle]","thought":"...","content":"...","tool_name":"...","tool_args":{...}}`;

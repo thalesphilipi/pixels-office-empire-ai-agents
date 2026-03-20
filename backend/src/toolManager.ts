@@ -1471,6 +1471,25 @@ export class ToolManager {
 
         if (!tool) return `Erro: Ferramenta "${name}" não encontrada. Use list_tools (e/ou register_tool_alias) para resolver.`;
 
+        // 🛡️ Filtro de Validação de Argumentos (Nível 500)
+        // Se o agente esqueceu argumentos obrigatórios, devolvemos a documentação imediatamente.
+        if (tool.parameters?.required && Array.isArray(tool.parameters.required)) {
+            const missingArgs = tool.parameters.required.filter((reqArg: string) => args[reqArg] === undefined || args[reqArg] === null || String(args[reqArg]).trim() === '');
+
+            if (missingArgs.length > 0) {
+                let usageHelp = `❌ Erro de Validação: Você esqueceu argumentos obrigatórios na ferramenta '${name}'.\nFaltando: ${missingArgs.join(', ')}.\n\n`;
+                usageHelp += `📚 Documentação de '${name}':\n${tool.description}\n`;
+                if (tool.parameters.properties) {
+                    for (const [key, prop] of Object.entries(tool.parameters.properties as Record<string, any>)) {
+                        const req = tool.parameters.required.includes(key) ? '(OBRIGATÓRIO)' : '(Opcional)';
+                        usageHelp += `- ${key} ${req}: ${prop.description}\n`;
+                    }
+                }
+                usageHelp += `\nCorrija seu JSON ("tool_args") e tente novamente.`;
+                return usageHelp;
+            }
+        }
+
         const safeArgs = (() => {
             const redactor = (k: string, v: any) => {
                 const key = (k || '').toLowerCase();
