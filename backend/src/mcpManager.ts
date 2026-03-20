@@ -919,6 +919,76 @@ Próximos passos: Edite os arquivos com mcp_fs_write_file para personalizar.`;
     },
 
     // ═══════════════════════════════════════════════════════════════
+    // 🔬 QA & LINTING (Autonomous verification)
+    // ═══════════════════════════════════════════════════════════════
+
+    'mcp_lint_project': {
+        name: 'mcp_lint_project',
+        description: '[MCP QA] Analisa um arquivo de código ou projeto inteiro em busca de erros de sintaxe e quebras estruturais (QA).',
+        parameters: {
+            type: 'object',
+            properties: {
+                path: { type: 'string', description: 'Caminho do arquivo ou projeto no workspace (ex: meu-site/js/app.js)' },
+                lang: { type: 'string', enum: ['js', 'html', 'css', 'php'], description: 'Linguagem (opcional)' }
+            },
+            required: ['path']
+        },
+        execute: async (args: any) => {
+            try {
+                await ensureWorkspace();
+                const targetPath = path.join(WORKSPACE_ROOT, args.path);
+                if (!targetPath.startsWith(WORKSPACE_ROOT)) return 'Erro: Caminho inválido.';
+
+                let stat: any;
+                try {
+                    stat = await fs.stat(targetPath);
+                } catch(e) {
+                    return `Erro: Arquivo/Diretório não encontrado em ${args.path}`;
+                }
+
+                // If it's a JS file, we can do a quick node --check
+                if (stat.isFile()) {
+                    const ext = path.extname(targetPath).toLowerCase();
+                    if (ext === '.js' || args.lang === 'js') {
+                        try {
+                            const { stderr } = await execAsync(`node --check ${shellEscapePosix(targetPath)}`);
+                            if (stderr) return `❌ ERRO DE SINTAXE (JS):\n${stderr.substring(0, 1000)}`;
+                            return `✅ NENHUM ERRO DE SINTAXE DETECTADO EM ${args.path} (JS/Node)`;
+                        } catch(e: any) {
+                            return `❌ ERRO DE SINTAXE (JS):\n${(e.stderr || e.message).substring(0, 1000)}`;
+                        }
+                    }
+                    if (ext === '.php' || args.lang === 'php') {
+                        try {
+                            const { stdout, stderr } = await execAsync(`php -l ${shellEscapePosix(targetPath)}`);
+                            return `✅ LINT PHP:\n${stdout.substring(0, 500)}`;
+                        } catch(e: any) {
+                            return `❌ ERRO DE SINTAXE (PHP):\n${(e.stdout || e.stderr || e.message).substring(0, 1000)}`;
+                        }
+                    }
+
+                    // Basic fallback for HTML check
+                    if (ext === '.html') {
+                        const content = await fs.readFile(targetPath, 'utf8');
+                        let errors = [];
+                        if (content.split('<html').length > 2) errors.push('Múltiplas tags <html> detectadas.');
+                        if (content.includes('undefined')) errors.push('Encontrado "undefined" injetado no HTML.');
+                        if (!content.includes('</body>')) errors.push('Tag </body> faltando.');
+
+                        if (errors.length > 0) return `❌ PROBLEMAS DETECTADOS (HTML):\n- ${errors.join('\n- ')}`;
+                        return `✅ HTML LINT PASS (Checagem Básica): Nenhum erro estrutural crítico encontrado em ${args.path}.`;
+                    }
+                }
+
+                // If it's a directory, just return a success check of basic validation
+                return `ℹ️ Verificação genérica para diretório (${args.path}) não suporta análise profunda ainda. Execute em arquivos específicos (.js, .html, .php).`;
+            } catch (e: any) {
+                return `Erro no linter: ${e.message}`;
+            }
+        }
+    },
+
+    // ═══════════════════════════════════════════════════════════════
     // 🔧 SHELL EXECUTE (Safe sandboxed terminal)
     // ═══════════════════════════════════════════════════════════════
 
@@ -1835,13 +1905,13 @@ ${projects.length > 0 ? projects.map(p => `  📂 ${p}/`).join('\n') : '  (nenhu
         parameters: {
             type: 'object',
             properties: {
-                action: { type: 'string', enum: ['get_balance', 'send_eth', 'deploy_contract'], description: 'Ação a realizar' },
-                address: { type: 'string', description: 'Endereço destino (opcional)' },
-                amount: { type: 'string', description: 'Quantidade em ETH (opcional)' }
+                action: { type: 'string', enum: ['get_balance', 'send_eth', 'swap_tokens'], description: 'Ação a realizar' },
+                address: { type: 'string', description: 'Endereço destino (para send_eth) ou contrato' },
+                amount: { type: 'string', description: 'Quantidade em ETH/Tokens (para send/swap)' }
             },
             required: ['action']
         },
-        execute: async (args: any) => {
+        execute: async (args: any, context: ToolContext) => {
             try {
                 const { db } = await import('./db.js');
                 const walletKey = db.prepare("SELECT key_value FROM vault WHERE service = 'blockchain' LIMIT 1").get() as any;
@@ -1866,8 +1936,36 @@ ${projects.length > 0 ? projects.map(p => `  📂 ${p}/`).join('\n') : '  (nenhu
                     return `💰 Saldo da conta ${addr}: ${balanceEth.toFixed(6)} ETH na Base Network.`;
                 }
 
-                if (args.action === 'send_eth' || args.action === 'deploy_contract') {
-                    return `🛡️ Operação de ESCRITA detectada (${args.action}). Por motivos de segurança, transações on-chain requerem uma assinatura manual ou um ambiente de produção real com RPC privado. A chave corporativa já está carregada internamente.`;
+                if (args.action === 'send_eth' || args.action === 'swap_tokens') {
+                    const approvalId = `app_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+
+                    try {
+                        // Tenta buscar a task atual (necessária para approvals)
+                        const task = db.prepare("SELECT id FROM tasks WHERE agent_id = ? AND status = 'pending' ORDER BY created_at ASC LIMIT 1").get(context.agentId) as any;
+                        const taskId = task?.id || `fake_task_${Date.now()}`; // fallback se não tiver task formal
+
+                        db.prepare('INSERT INTO approvals (id, task_id, agent_id, action_type, action_data, status) VALUES (?, ?, ?, ?, ?, ?)').run(
+                            approvalId,
+                            taskId,
+                            context.agentId,
+                            'blockchain_tx',
+                            JSON.stringify({
+                                type: args.action,
+                                address: args.address,
+                                amount: args.amount,
+                                network: 'Base'
+                            }),
+                            'pending'
+                        );
+
+                        // Notificar o Humano
+                        db.prepare('INSERT INTO messages (id, from_agent_id, to_agent_id, content) VALUES (?, ?, ?, ?)').run(`m_${Date.now()}`, context.agentId, 'HUMAN', `🚨 PREPAREI UMA TRANSAÇÃO BLOCKCHAIN 🚨\nAção: ${args.action}\nDestino: ${args.address}\nQuantidade: ${args.amount}\n\nPor favor, revise e aprove (ID: ${approvalId}).`);
+
+                        return `🛡️ Operação de ESCRITA detectada (${args.action}). Por motivos de segurança, a transação foi retida. Criei um pedido de aprovação (${approvalId}) e notifiquei o Dono. Aguardando assinatura manual.`;
+
+                    } catch(e: any) {
+                        return `Erro ao gerar pedido de aprovação Web3: ${e.message}`;
+                    }
                 }
 
                 return 'Ação desconhecida.';

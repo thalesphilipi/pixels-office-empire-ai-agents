@@ -95,15 +95,20 @@ export function initDb() {
             agent_id TEXT,
             division_id TEXT,
             description TEXT NOT NULL,
-            status TEXT DEFAULT 'pending', -- pending, running, waiting_approval, done, error
+            status TEXT DEFAULT 'pending', -- pending, running, waiting_approval, done, error, completed
             schedule TEXT, -- cron string if scheduled
             logs TEXT, -- JSON array of job logs
+            depends_on TEXT, -- ID of another task that must be 'completed' before this one runs
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(agent_id) REFERENCES agents(id)
+            FOREIGN KEY(agent_id) REFERENCES agents(id),
+            FOREIGN KEY(depends_on) REFERENCES tasks(id)
         );
     `);
     try {
         db.exec("ALTER TABLE tasks ADD COLUMN division_id TEXT;");
+    } catch (e) { /* ignore if exists */ }
+    try {
+        db.exec("ALTER TABLE tasks ADD COLUMN depends_on TEXT;");
     } catch (e) { /* ignore if exists */ }
 
     // Divisions table (Objectives / Projects)

@@ -1295,7 +1295,8 @@ const TOOLS: Record<string, Tool> = {
                 description: { type: 'string', description: 'Descrição da tarefa' },
                 agent_id: { type: 'string', description: 'ID do agente (opcional)' },
                 agent_name: { type: 'string', description: 'Nome do agente (opcional)' },
-                division_id: { type: 'string', description: 'ID da divisão (opcional)' }
+                division_id: { type: 'string', description: 'ID da divisão (opcional)' },
+                depends_on: { type: 'string', description: 'ID da tarefa que deve ser concluída antes desta (opcional)' }
             },
             required: ['description']
         },
@@ -1304,10 +1305,20 @@ const TOOLS: Record<string, Tool> = {
             if (!description) return 'Erro: description vazia.';
             const agentId = (args?.agent_id ?? '').toString().trim() || (args?.agent_name ? resolveAgentIdByName(String(args.agent_name)) : null) || context.agentId;
             const divId = (args?.division_id ?? '').toString().trim() || getAgentDivisionId(agentId) || null;
+            const dependsOn = (args?.depends_on ?? '').toString().trim() || null;
             const newId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-            db.prepare('INSERT INTO tasks (id, agent_id, division_id, description, status) VALUES (?, ?, ?, ?, ?)').run(newId, agentId, divId, description, 'pending');
+            try {
+                db.prepare('INSERT INTO tasks (id, agent_id, division_id, description, status, depends_on) VALUES (?, ?, ?, ?, ?, ?)').run(newId, agentId, divId, description, 'pending', dependsOn);
+            } catch(e) {
+                // Falback if depends_on column is not available
+                db.prepare('INSERT INTO tasks (id, agent_id, division_id, description, status) VALUES (?, ?, ?, ?, ?)').run(newId, agentId, divId, description, 'pending');
+            }
             if (ioInstance) ioInstance.emit('message', { type: 'taskCreated', task_id: newId });
-            return `Tarefa criada: ${newId} (agent_id=${agentId})`;
+            let depMsg = '';
+            if (dependsOn) {
+                depMsg = ` [Bloqueada até a tarefa ${dependsOn} ser concluída]`;
+            }
+            return `Tarefa criada: ${newId} (agent_id=${agentId})${depMsg}`;
         }
     },
     'create_subdomain_task': {

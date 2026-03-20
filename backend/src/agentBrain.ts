@@ -346,12 +346,47 @@ Formato esperado:
             if (inbox.length > maxInbox) prompt += `(+${inbox.length - maxInbox} antigas)\n`;
         }
         try {
-            const task = db.prepare("SELECT id, description FROM tasks WHERE agent_id = ? AND status = 'pending' ORDER BY created_at ASC LIMIT 1").get(this.config.id) as any;
+            // Task priority logic:
+            // - pending
+            // - no dependencies (depends_on IS NULL) OR dependency is completed.
+            const task = db.prepare(`
+                SELECT t.id, t.description
+                FROM tasks t
+                LEFT JOIN tasks dep ON t.depends_on = dep.id
+                WHERE t.agent_id = ? AND t.status = 'pending'
+                AND (t.depends_on IS NULL OR t.depends_on = '' OR dep.status = 'completed')
+                ORDER BY t.created_at ASC LIMIT 1
+            `).get(this.config.id) as any;
+
             if (task?.id && task?.description) {
                 const desc = String(task.description || '').trim();
                 // Task description limits for small local models
                 const descPreview = desc.length > 800 ? (desc.slice(0, 800) + '...') : desc;
                 prompt += `\nTask Ativa (${task.id}):\n${descPreview}\n`;
+
+                // --- RAG Passivo (Memória de Longo Prazo Associativa) ---
+                // Tenta extrair palavras chaves da task para buscar dicas na Knowledge Base
+                const taskKeywords = desc.split(' ').filter(w => w.length > 4).slice(0, 3).map(w => w.replace(/[^a-zA-Z0-9]/g, ''));
+                if (taskKeywords.length > 0) {
+                    try {
+                        let sql = "SELECT title, content FROM knowledge_base WHERE ";
+                        let conditions = [];
+                        let params = [];
+                        for(const word of taskKeywords) {
+                           conditions.push("(title LIKE ? OR content LIKE ?)");
+                           params.push(`%${word}%`);
+                           params.push(`%${word}%`);
+                        }
+                        sql += conditions.join(' OR ') + " ORDER BY created_at DESC LIMIT 1";
+
+                        const kbMatch = db.prepare(sql).get(...params) as any;
+                        if (kbMatch && kbMatch.title && kbMatch.content) {
+                            prompt += `\n💡 Memória Associativa (Dica Interna da Empresa):\n[${kbMatch.title}]: ${kbMatch.content.substring(0, 300)}...\n`;
+                        }
+                    } catch (kbError) {
+                        // ignore if knowledge_base table doesn't exist or query fails
+                    }
+                }
             }
         } catch (e) { }
         prompt += "\nSaída (JSON):";
@@ -628,7 +663,14 @@ export class BrainManager {
             }
 
             const inbox = db.prepare(`SELECT m.*, COALESCE(a.name, 'USER') as from_name FROM messages m LEFT JOIN agents a ON m.from_agent_id = a.id WHERE m.to_agent_id = ? AND m.read = 0`).all(id) as any[];
-            const pendingTask = db.prepare("SELECT id, description FROM tasks WHERE agent_id = ? AND status = 'pending' ORDER BY created_at ASC LIMIT 1").get(id) as any;
+            const pendingTask = db.prepare(`
+                SELECT t.id, t.description
+                FROM tasks t
+                LEFT JOIN tasks dep ON t.depends_on = dep.id
+                WHERE t.agent_id = ? AND t.status = 'pending'
+                AND (t.depends_on IS NULL OR t.depends_on = '' OR dep.status = 'completed')
+                ORDER BY t.created_at ASC LIMIT 1
+            `).get(id) as any;
 
             try {
                 if (pendingTask?.id && pendingTask?.description) {
@@ -683,7 +725,15 @@ export class BrainManager {
 
                 try {
                     if (toolFailed) return;
-                    const current = db.prepare("SELECT id, description FROM tasks WHERE agent_id = ? AND status = 'pending' ORDER BY created_at ASC LIMIT 1").get(id) as any;
+                    const current = db.prepare(`
+                        SELECT t.id, t.description
+                        FROM tasks t
+                        LEFT JOIN tasks dep ON t.depends_on = dep.id
+                        WHERE t.agent_id = ? AND t.status = 'pending'
+                        AND (t.depends_on IS NULL OR t.depends_on = '' OR dep.status = 'completed')
+                        ORDER BY t.created_at ASC LIMIT 1
+                    `).get(id) as any;
+
                     if (current?.id && current?.description && typeof current.description === 'string') {
                         const toolName = String(res.tool_name || '').trim();
                         const lines = current.description.split('\n');
@@ -711,7 +761,14 @@ export class BrainManager {
             }
 
             if (res.action === 'complete_task') {
-                const current = db.prepare("SELECT id FROM tasks WHERE agent_id = ? AND status = 'pending' ORDER BY created_at ASC LIMIT 1").get(id) as any;
+                const current = db.prepare(`
+                    SELECT t.id
+                    FROM tasks t
+                    LEFT JOIN tasks dep ON t.depends_on = dep.id
+                    WHERE t.agent_id = ? AND t.status = 'pending'
+                    AND (t.depends_on IS NULL OR t.depends_on = '' OR dep.status = 'completed')
+                    ORDER BY t.created_at ASC LIMIT 1
+                `).get(id) as any;
                 const taskId = (res.task_id || current?.id || '').toString();
                 if (taskId) {
                     console.log(`[${agent.name}] ✅ TAREFA CONCLUÍDA: ${taskId}`);
