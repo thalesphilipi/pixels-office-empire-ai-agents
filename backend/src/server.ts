@@ -767,18 +767,6 @@ async function initServer() {
         }
         process.env.LLM_MODE = mode;
 
-        if (mode === 'local') {
-            if (!process.env.LLM_BASE_URL) process.env.LLM_BASE_URL = 'http://host.docker.internal:1234/v1';
-            if (!process.env.LLM_MODEL) process.env.LLM_MODEL = 'qwen3.5-9b-claude-4.6-opus-distilled-32k';
-            if (!process.env.LLM_MAX_TOKENS) process.env.LLM_MAX_TOKENS = '2048';
-            try {
-                db.prepare('UPDATE agents SET llm_base_url = ?, llm_model = ?').run(
-                    process.env.LLM_BASE_URL || null,
-                    process.env.LLM_MODEL || null
-                );
-            } catch (e) { }
-        }
-
         res.json({
             success: true,
             mode: process.env.LLM_MODE,
