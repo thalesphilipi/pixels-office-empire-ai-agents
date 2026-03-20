@@ -36,6 +36,34 @@ const WORKSPACE_ROOT = '/data/projects';
 async function ensureWorkspace() {
     try {
         await fs.mkdir(WORKSPACE_ROOT, { recursive: true });
+
+        // 📚 Destilação de Conhecimento (Level 500)
+        // Auto-gera o manual de habilidades se ele não existir
+        const manualPath = path.join(WORKSPACE_ROOT, 'AGENTS_MANUAL.md');
+        try {
+            await fs.access(manualPath);
+        } catch {
+            const manualContent = `# 🧠 Manual de Habilidades da Agência (SOP)
+
+Este documento contém o conhecimento destilado da nossa agência para que você (Agente) trabalhe com perfeição. Leia com atenção.
+
+## 1. Regras de Edição de Código (CRÍTICO)
+- **NUNCA** use \`mcp_fs_write_file\` ou tente reescrever arquivos grandes (mais de 100 linhas). Modelos LLM truncam o código.
+- Para consertar um bug pequeno (1 a 5 linhas), **SEMPRE** use \`mcp_fs_replace_line\`. É cirúrgico e não quebra o arquivo.
+- Para substituir funções inteiras ou blocos grandes, **SEMPRE** use \`mcp_fs_replace_block\`. Certifique-se de que a \`old_block\` corresponda **exatamente** ao que está no arquivo (você pode ler o arquivo antes com \`mcp_fs_read_range\` para ter certeza da formatação).
+
+## 2. Regras de Navegação e Terminal
+- Está perdido em um projeto grande? Não use múltiplos comandos \`ls\`. Use **UMA VEZ** a ferramenta \`mcp_fs_tree\` para entender a estrutura de pastas instantaneamente.
+- O terminal (\`mcp_shell_exec\`) é burro. Ele **não** pode responder a perguntas de [Yes/No]. Se você rodar um comando interativo, ele vai travar e dar timeout. SEMPRE adicione flags como \`-y\`, \`--yes\`, ou \`--non-interactive\`.
+
+## 3. O Fluxo de Trabalho (Pipeline)
+1. O **CTO** roda o scaffold.
+2. O **Dev Fullstack** programa as regras de negócio editando os arquivos isoladamente.
+3. A **QA Tester** roda \`mcp_lint_project\`. Se falhar, ela devolve para o Dev.
+4. O **CTO** faz o deploy apenas quando a QA dá o ok final.
+`;
+            await fs.writeFile(manualPath, manualContent, 'utf-8');
+        }
     } catch (e) { }
 }
 
