@@ -88,25 +88,6 @@ export function BottomToolbar({
     }
   }, [])
 
-  const toggleLocalLlm = async () => {
-    if (llmModeLoading) return
-    const nextMode: 'local' | 'agent' = llmMode === 'local' ? 'agent' : 'local'
-    setLlmModeLoading(true)
-    try {
-      const resp = await fetch('http://localhost:3000/api/admin/llm/mode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: nextMode }),
-      })
-      const data = await resp.json().catch(() => ({}))
-      if (!resp.ok) return
-      const mode = (data?.mode || nextMode).toString().toLowerCase()
-      setLlmMode(mode === 'local' ? 'local' : 'agent')
-    } finally {
-      setLlmModeLoading(false)
-    }
-  }
-
   return (
     <div style={panelStyle}>
       <button
@@ -125,24 +106,6 @@ export function BottomToolbar({
         🚨 Aprovações
       </button>
 
-      <button
-        onClick={onOpenClaude}
-        onMouseEnter={() => setHovered('agent')}
-        onMouseLeave={() => setHovered(null)}
-        style={{
-          ...btnBase,
-          padding: '5px 12px',
-          background:
-            hovered === 'agent'
-              ? 'var(--pixel-agent-hover-bg)'
-              : 'var(--pixel-agent-bg)',
-          border: '2px solid var(--pixel-agent-border)',
-          color: 'var(--pixel-agent-text)',
-        }}
-        title={t('Create New Agent')}
-      >
-        + {t('Agent')}
-      </button>
       <button
         onClick={onOpenAgents}
         onMouseEnter={() => setHovered('staff')}
@@ -196,24 +159,6 @@ export function BottomToolbar({
         {t('Chat')}
       </button>
       <button
-        onClick={toggleLocalLlm}
-        onMouseEnter={() => setHovered('local')}
-        onMouseLeave={() => setHovered(null)}
-        style={
-          llmMode === 'local'
-            ? { ...btnActive }
-            : {
-              ...btnBase,
-              opacity: llmModeLoading ? 0.6 : 1,
-              background: hovered === 'local' ? 'var(--pixel-btn-hover-bg)' : btnBase.background,
-            }
-        }
-        title={t('Run local LLM (LM Studio)')}
-        disabled={llmModeLoading}
-      >
-        {llmMode === 'local' ? '☑ Local' : '☐ Local'}
-      </button>
-      <button
         onClick={onOpenVault}
         onMouseEnter={() => setHovered('vault')}
         onMouseLeave={() => setHovered(null)}
@@ -222,9 +167,9 @@ export function BottomToolbar({
           background: hovered === 'vault' ? '#fbbf24' : btnBase.background,
           color: hovered === 'vault' ? '#000' : btnBase.color,
         }}
-        title={t('API Vault (Keys)')}
+        title="Cofre de Chaves (Vault)"
       >
-        🔒
+        🔒 Cofre / Hosting
       </button>
       <button
         onClick={onToggleEditMode}

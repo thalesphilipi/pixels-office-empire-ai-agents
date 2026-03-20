@@ -11,11 +11,11 @@ interface VaultKey {
 const panelStyle: React.CSSProperties = {
     flex: 1,
     overflowY: 'auto',
-    padding: '20px',
-    background: 'rgba(10, 15, 30, 0.4)',
+    padding: '30px',
+    background: 'rgba(10, 15, 30, 0.95)',
     color: '#e2e8f0',
-    fontFamily: '"Press Start 2P", monospace',
-    fontSize: '9px',
+    fontFamily: '"Courier New", Courier, monospace',
+    fontSize: '16px',
 };
 
 const keyCardStyle: React.CSSProperties = {
@@ -106,14 +106,18 @@ export function VaultPanel() {
     return (
         <div style={panelStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-                <h2 style={{ fontSize: '14px', color: '#fbbf24' }}>🔒 {t('API Vault (Keys)')}</h2>
+                <h2 style={{ fontSize: '24px', color: '#fbbf24' }}>🔒 Cofre de Chaves e Credenciais da Agência</h2>
                 <button
-                    style={{ ...btnStyle, background: showAdd ? '#ef4444' : '#10b981' }}
+                    style={{ ...btnStyle, background: showAdd ? '#ef4444' : '#10b981', fontSize: '18px' }}
                     onClick={() => setShowAdd(!showAdd)}
                 >
-                    {showAdd ? t('Cancel') : `+ ${t('Add Key')}`}
+                    {showAdd ? 'Cancelar' : `+ Adicionar Credencial`}
                 </button>
             </div>
+            <p style={{ opacity: 0.8, marginBottom: '20px', lineHeight: '1.5' }}>
+                Os agentes autônomos acessam este Cofre para realizar ações reais (como Deploys, integrações com GitHub ou Vercel).<br />
+                Certifique-se de adicionar as credenciais corretas para que o CTO consiga faturar projetos.
+            </p>
 
             {showAdd && (
                 <div style={{ ...keyCardStyle, flexDirection: 'column', alignItems: 'flex-start' }}>
