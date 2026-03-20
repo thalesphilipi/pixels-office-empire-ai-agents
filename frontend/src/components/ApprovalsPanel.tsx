@@ -21,7 +21,9 @@ export function ApprovalsPanel({ onClose }: ApprovalsPanelProps) {
 
   const fetchApprovals = async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/approvals')
+      // Usando API relativa ou default localhost
+      const apiUrl = window.location.hostname === 'localhost' ? 'http://localhost:3000/api/approvals' : '/api/approvals';
+      const res = await fetch(apiUrl)
       if (res.ok) {
         const data = await res.json()
         setApprovals(data)
@@ -40,7 +42,8 @@ export function ApprovalsPanel({ onClose }: ApprovalsPanelProps) {
   const handleAction = async (id: string, action: 'approve' | 'reject') => {
     setLoading(true)
     try {
-      await fetch(`http://localhost:3000/api/approvals/${id}/action`, {
+      const apiUrl = window.location.hostname === 'localhost' ? `http://localhost:3000/api/approvals/${id}/action` : `/api/approvals/${id}/action`;
+      await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),

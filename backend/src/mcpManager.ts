@@ -154,6 +154,70 @@ const mcpTools: Record<string, Tool> = {
         }
     },
 
+    'mcp_fs_replace_block': {
+        name: 'mcp_fs_replace_block',
+        description: '[MCP Filesystem] Substitui um bloco exato de texto em um arquivo. Útil para reescrever funções inteiras ou tags HTML completas sem depender de números de linha que podem mudar.',
+        parameters: {
+            type: 'object',
+            properties: {
+                path: { type: 'string', description: 'Caminho relativo ao workspace (ex: js/app.js)' },
+                old_block: { type: 'string', description: 'O bloco de código antigo exato a ser procurado e substituído (pode ter várias linhas, mas deve casar exatamente com o conteúdo original)' },
+                new_block: { type: 'string', description: 'O novo código que vai entrar no lugar do bloco antigo' }
+            },
+            required: ['path', 'old_block', 'new_block']
+        },
+        execute: async (args: any) => {
+            try {
+                await ensureWorkspace();
+                const fullPath = path.join(WORKSPACE_ROOT, args.path);
+                if (!fullPath.startsWith(WORKSPACE_ROOT)) return 'Erro: Caminho inválido.';
+
+                const oldBlock = (args.old_block || '').toString();
+                const newBlock = (args.new_block || '').toString();
+
+                if (oldBlock.length === 0) return 'Erro: old_block está vazio.';
+
+                let content = await fs.readFile(fullPath, 'utf-8');
+
+                // Normaliza quebras de linha para evitar falhas por LF vs CRLF
+                const normalizeNL = (str: string) => str.replace(/\r\n/g, '\n').trim();
+
+                const normalizedContent = content.replace(/\r\n/g, '\n');
+                const normalizedOld = normalizeNL(oldBlock);
+
+                const idx = normalizedContent.indexOf(normalizedOld);
+
+                if (idx === -1) {
+                     // Tenta uma busca um pouco mais flexível se a exata falhar
+                     const linesOld = normalizedOld.split('\n');
+                     if (linesOld.length > 1) {
+                         return `❌ Falha na substituição: O bloco exato fornecido não foi encontrado no arquivo. Tente usar uma assinatura de função mais específica ou use mcp_fs_replace_line para erros isolados.`;
+                     }
+                     return `❌ Falha na substituição: Texto exato não encontrado em ${args.path}.`;
+                }
+
+                // Conta quantas ocorrências existem para evitar substituir o lugar errado acidentalmente
+                let occurrences = 0;
+                let searchIdx = normalizedContent.indexOf(normalizedOld);
+                while (searchIdx !== -1) {
+                    occurrences++;
+                    searchIdx = normalizedContent.indexOf(normalizedOld, searchIdx + 1);
+                }
+
+                if (occurrences > 1) {
+                    return `⚠️ Aviso: Existem ${occurrences} ocorrências deste bloco no arquivo. A substituição de bloco falhou porque a busca é ambígua. Forneça um bloco old_block maior/mais exclusivo.`;
+                }
+
+                const newContent = normalizedContent.replace(normalizedOld, newBlock);
+                await fs.writeFile(fullPath, newContent, 'utf-8');
+
+                return `✅ Bloco substituído com sucesso no arquivo ${args.path}!\nForam atualizadas ${normalizedOld.split('\n').length} linhas antigas para ${newBlock.split('\n').length} linhas novas.`;
+            } catch (e: any) {
+                return `Erro na substituição de bloco: ${e.message}`;
+            }
+        }
+    },
+
     'mcp_fs_replace_line': {
         name: 'mcp_fs_replace_line',
         description: '[MCP Filesystem] Usado para autocorreção focada. Substitui EXATAMENTE UMA LINHA de código onde o linter detectou erro.',
@@ -559,6 +623,69 @@ const mcpTools: Record<string, Tool> = {
         }
     },
 
+    'mcp_fs_tree': {
+        name: 'mcp_fs_tree',
+        description: '[MCP Filesystem] Retorna a estrutura de diretórios e arquivos em formato de árvore (tree). Essencial para entender a arquitetura do projeto rapidamente antes de codar.',
+        parameters: {
+            type: 'object',
+            properties: {
+                path: { type: 'string', description: 'Caminho relativo ao workspace (ex: meu-site/ ou vazio para raiz)' },
+                max_depth: { type: 'number', description: 'Profundidade máxima da árvore (padrão: 4)' }
+            }
+        },
+        execute: async (args: any) => {
+            try {
+                await ensureWorkspace();
+                const targetPath = path.join(WORKSPACE_ROOT, args.path || '');
+                if (!targetPath.startsWith(WORKSPACE_ROOT)) return 'Erro: Caminho inválido.';
+
+                const maxDepth = Math.min(10, Math.max(1, Number(args.max_depth || 4)));
+                let treeOutput = `📦 ${args.path || '/'}\n`;
+                let fileCount = 0;
+                let dirCount = 0;
+
+                async function buildTree(dir: string, prefix: string, currentDepth: number) {
+                    if (currentDepth > maxDepth) return;
+
+                    try {
+                        const entries = await fs.readdir(dir, { withFileTypes: true });
+                        // Sort: directories first, then files
+                        entries.sort((a, b) => {
+                            if (a.isDirectory() && !b.isDirectory()) return -1;
+                            if (!a.isDirectory() && b.isDirectory()) return 1;
+                            return a.name.localeCompare(b.name);
+                        });
+
+                        const filtered = entries.filter(e => !['node_modules', '.git', 'dist', 'build', '.next', '.turbo'].includes(e.name));
+
+                        for (let i = 0; i < filtered.length; i++) {
+                            const entry = filtered[i];
+                            const isLast = i === filtered.length - 1;
+                            const connector = isLast ? '└── ' : '├── ';
+
+                            if (entry.isDirectory()) {
+                                dirCount++;
+                                treeOutput += `${prefix}${connector}📁 ${entry.name}\n`;
+                                await buildTree(path.join(dir, entry.name), prefix + (isLast ? '    ' : '│   '), currentDepth + 1);
+                            } else {
+                                fileCount++;
+                                treeOutput += `${prefix}${connector}📄 ${entry.name}\n`;
+                            }
+                        }
+                    } catch (e) {
+                        treeOutput += `${prefix}└── ❌ Acesso negado ou erro ao ler\n`;
+                    }
+                }
+
+                await buildTree(targetPath, '', 1);
+
+                return `Árvore de Diretórios (Profundidade: ${maxDepth}):\n${treeOutput}\nResumo: ${dirCount} pastas, ${fileCount} arquivos.`;
+            } catch (e: any) {
+                return `Erro ao gerar árvore: ${e.message}`;
+            }
+        }
+    },
+
     'mcp_fs_create_directory': {
         name: 'mcp_fs_create_directory',
         description: '[MCP Filesystem] Cria um diretório (e subdiretórios) no projeto.',
@@ -724,7 +851,15 @@ Use este framework para organizar seu raciocínio e responda com sua análise co
         execute: async (args: any) => {
             try {
                 const page = await getBrowserPage();
-                const savePath = args.path ? path.join(WORKSPACE_ROOT, args.path) : undefined;
+                let savePath = undefined;
+
+                if (args.path) {
+                    savePath = path.join(WORKSPACE_ROOT, args.path);
+                    if (!savePath.startsWith(WORKSPACE_ROOT)) {
+                        return 'Erro: Caminho inválido (Tentativa de path traversal).';
+                    }
+                }
+
                 const buffer = await page.screenshot({ path: savePath, fullPage: false });
 
                 if (savePath) {
@@ -1228,11 +1363,11 @@ Próximos passos: Edite os arquivos com mcp_fs_write_file para personalizar.`;
 
     'mcp_shell_exec': {
         name: 'mcp_shell_exec',
-        description: '[MCP Shell] Executa um comando no terminal do servidor dentro do workspace de projetos. Use para npm init, git, build, etc.',
+        description: '[MCP Shell] Executa um comando no terminal do servidor (dentro do workspace de projetos). NUNCA rode comandos interativos (ex: sempre use -y). Comandos que aguardam input do usuário vão causar timeout e falhar.',
         parameters: {
             type: 'object',
             properties: {
-                command: { type: 'string', description: 'Comando a executar (ex: npm init -y, git init, ls -la)' }
+                command: { type: 'string', description: 'Comando a executar (ex: npm install --yes, git init, npm run build)' }
             },
             required: ['command']
         },
@@ -1248,22 +1383,31 @@ Próximos passos: Edite os arquivos com mcp_fs_write_file para personalizar.`;
                     /\breboot\b/,
                     /\bkill\s+-[0-9]+\b/,
                     /\bkillall\b/,
-                    /\bdd\b/
+                    /\bdd\b/,
+                    /\bnano\b/,
+                    /\bvim\b/,
+                    /\bvi\b/,
+                    /\btop\b/,
+                    /\bhtop\b/
                 ];
 
                 if (blockedPatterns.some(pattern => pattern.test(args.command))) {
-                    return 'Erro: Comando bloqueado por segurança (comando perigoso detectado).';
+                    return 'Erro: Comando bloqueado por segurança (comando interativo ou perigoso detectado).';
                 }
 
                 const { stdout, stderr } = await execAsync(args.command, {
                     cwd: WORKSPACE_ROOT,
-                    timeout: 30000,
+                    timeout: 15000, // Timeout mais curto (15s) para comandos que travam o loop
                     env: { ...process.env, HOME: '/tmp' }
                 });
 
                 const output = (stdout + (stderr ? `\n[stderr]: ${stderr}` : '')).trim();
                 return `$ ${args.command}\n\n${output.substring(0, 4000)}`;
             } catch (e: any) {
+                // Melhorando a mensagem de erro para Timeout de comandos interativos
+                if (e.message && e.message.includes('Command failed') && e.message.includes('timeout')) {
+                     return `❌ Erro de Timeout: O comando "${args.command}" demorou mais que 15 segundos ou travou esperando input interativo do usuário (como [Y/n]). Revise o comando e adicione flags como -y ou --yes.`;
+                }
                 return `Erro na execução: ${e.message}`;
             }
         }
