@@ -21,6 +21,7 @@ import { AgentInfoPanel } from './components/AgentInfoPanel.js'
 import { VaultPanel } from './components/VaultPanel.js'
 import { DivisionsManager } from './components/DivisionsManager.js'
 import { ApprovalsPanel } from './components/ApprovalsPanel.js'
+import { CompanyHud } from './components/CompanyHud.js'
 
 // Game state lives outside React — updated imperatively by message handlers
 const officeStateRef = { current: null as OfficeState | null }
@@ -246,6 +247,9 @@ function App() {
         isChatOpen={showChat}
         onToggleChat={() => setShowChat((v) => !v)}
       />
+
+      {/* HUD Tycoon superior (dinheiro da empresa) */}
+      <CompanyHud />
 
       {activeModal === 'vault' && (
         <div style={{ position: 'absolute', inset: '40px', zIndex: 100, background: 'var(--pixel-bg)', border: '4px solid var(--pixel-border)', display: 'flex', flexDirection: 'column' }}>
