@@ -1219,11 +1219,19 @@ const TOOLS: Record<string, Tool> = {
                 ? (db.prepare('SELECT id FROM agents WHERE id != ?').all(context.agentId) as Array<{ id: string }>).map(r => r.id)
                 : [String(toId)];
 
-            for (const tid of targets) {
-                const mid = `m_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-                db.prepare('INSERT INTO messages (id, from_agent_id, to_agent_id, content) VALUES (?, ?, ?, ?)').run(mid, context.agentId, tid, content);
-                if (ioInstance) {
-                    const fromNumId = Number(context.agentId.slice(-6)) || 0;
+            const insertMessage = db.prepare('INSERT INTO messages (id, from_agent_id, to_agent_id, content) VALUES (?, ?, ?, ?)');
+            const performInsertions = db.transaction((tids: string[]) => {
+                for (const tid of tids) {
+                    const mid = `m_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                    insertMessage.run(mid, context.agentId, tid, content);
+                }
+            });
+
+            performInsertions(targets);
+
+            if (ioInstance) {
+                const fromNumId = Number(context.agentId.slice(-6)) || 0;
+                for (const tid of targets) {
                     ioInstance.emit('message', {
                         type: 'agentChat',
                         agentId: context.agentId,
