@@ -132,7 +132,7 @@ function App() {
   const { agents, selectedAgent, agentTools, agentStatuses, subagentTools, subagentCharacters, layoutReady, loadedAssets, workspaceFolders, chatLog } = useExtensionMessages(getOfficeState, editor.setLastSavedLayout, isEditDirty)
 
   const [isDebugMode, setIsDebugMode] = useState(false)
-  const [activeModal, setActiveModal] = useState<'agents' | 'tasks' | 'vault' | 'divisions' | null>(null)
+  const [activeModal, setActiveModal] = useState<'agents' | 'tasks' | 'vault' | 'divisions' | 'approvals' | null>(null)
   const [showChat, setShowChat] = useState(true)
   const [selectedAgentInfoId, setSelectedAgentInfoId] = useState<number | null>(null)
 
