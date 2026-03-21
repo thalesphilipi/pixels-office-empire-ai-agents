@@ -2540,11 +2540,22 @@ ${projects.length > 0 ? projects.map(p => `  📂 ${p}/`).join('\n') : '  (nenhu
                 let errorCount = 0;
 
                 for (const file of files) {
-                    const remotePath = `${remoteBase}/${file.relPath}`;
-                    // curl -u user:pass --ftp-create-dirs -T file ftp://host/path/
-                    const cmd = `curl -k -u ${shellEscapePosix(user)}:${shellEscapePosix(pass)} --ftp-create-dirs -T ${shellEscapePosix(file.fullPath)} ftp://${host}/${remotePath}`;
+                    const remoteUrl = `ftp://${host}/${remoteBase}/${file.relPath}`;
+                    const cmd = [
+                        'curl',
+                        '-k',
+                        '--silent',
+                        '--show-error',
+                        '--fail',
+                        '--ftp-create-dirs',
+                        '--user',
+                        shellEscapePosix(`${user}:${pass}`),
+                        '-T',
+                        shellEscapePosix(file.fullPath),
+                        shellEscapePosix(remoteUrl)
+                    ].join(' ');
                     try {
-                        await execAsync(cmd);
+                        await execAsync(cmd, { maxBuffer: 1024 * 1024 * 10 });
                         uploadCount++;
                     } catch (e) {
                         console.error(`Erro ao subir ${file.relPath}:`, e);
