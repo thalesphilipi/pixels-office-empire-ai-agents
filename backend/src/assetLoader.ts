@@ -55,9 +55,7 @@ export async function loadFurnitureAssets(
   workspaceRoot: string,
 ): Promise<LoadedAssets | null> {
   try {
-    console.log(`[AssetLoader] workspaceRoot received: "${workspaceRoot}"`)
     const catalogPath = path.join(workspaceRoot, 'assets', 'furniture', 'furniture-catalog.json')
-    console.log(`[AssetLoader] Attempting to load from: ${catalogPath}`)
 
     if (!fs.existsSync(catalogPath)) {
       console.log('ℹ️  No furniture catalog found at:', catalogPath)
@@ -422,14 +420,12 @@ export function sendAssetsToWebview(
     return
   }
 
-  console.log('[AssetLoader] Converting sprites Map to object...')
   // Convert sprites Map to plain object for JSON serialization
   const spritesObj: Record<string, string[][]> = {}
   for (const [id, spriteData] of assets.sprites) {
     spritesObj[id] = spriteData
   }
 
-  console.log(`[AssetLoader] Posting furnitureAssetsLoaded message with ${assets.catalog.length} assets`)
   socket.emit('message', {
     type: 'furnitureAssetsLoaded',
     catalog: assets.catalog,
